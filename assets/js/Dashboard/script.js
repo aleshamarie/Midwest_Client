@@ -604,13 +604,8 @@ async function saveProduct() {
 }
 
 async function uploadProductImage(productId, imageFile) {
-  // Convert file to base64
-  const base64Data = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(imageFile);
-  });
+  // Compress image before converting to base64
+  const compressedImageData = await compressImage(imageFile, 0.8, 800); // 80% quality, max 800px width
   
   const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
     method: 'POST',
@@ -620,12 +615,13 @@ async function uploadProductImage(productId, imageFile) {
     },
     body: JSON.stringify({
       productId,
-      imageData: base64Data
+      imageData: compressedImageData
     })
   });
   
   if (!response.ok) {
-    throw new Error('Image upload failed');
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Image upload failed');
   }
   
   const result = await response.json();
@@ -638,6 +634,38 @@ async function uploadProductImage(productId, imageFile) {
   }
   
   return result;
+}
+
+// Image compression function
+function compressImage(file, quality = 0.8, maxWidth = 800) {
+  return new Promise((resolve, reject) => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    
+    img.onload = () => {
+      // Calculate new dimensions
+      let { width, height } = img;
+      if (width > maxWidth) {
+        height = (height * maxWidth) / width;
+        width = maxWidth;
+      }
+      
+      // Set canvas dimensions
+      canvas.width = width;
+      canvas.height = height;
+      
+      // Draw and compress
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      // Convert to base64 with compression
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve(compressedDataUrl);
+    };
+    
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
 }
 
 async function deleteProductImage(productIndex) {
@@ -711,9 +739,13 @@ function handleProductImageSelect(event) {
     return;
   }
   
-  // Validate file size (5MB limit)
-  if (file.size > 5 * 1024 * 1024) {
-    Swal.fire({ icon: 'warning', title: 'File size must be less than 5MB' });
+  // Validate file size (1MB limit for deployed server)
+  if (file.size > 1024 * 1024) {
+    Swal.fire({ 
+      icon: 'warning', 
+      title: 'File too large', 
+      text: 'File size must be less than 1MB. The image will be automatically compressed.' 
+    });
     return;
   }
   
