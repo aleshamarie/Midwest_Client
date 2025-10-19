@@ -1094,8 +1094,12 @@ function openOrderReviewModal(i) {
         items = ord.items || [];
       }
       const rows = items.map(it => {
-        // Handle nested product_id object structure
-        const name = it.product_name || (it.product_id && it.product_id.name) || it.name || ('#' + (it.product_id && it.product_id._id || it.product_id));
+        // Handle different product name sources
+        const name = it.product_name || 
+                    it.name || 
+                    (it.product_id && it.product_id.name) || 
+                    (it.product_details && it.product_details.name) ||
+                    'Unknown Product';
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || (it.product_id && it.product_id.price) || it.price || 0);
         const total = Number(it.total_price || (qty * price));
@@ -1109,8 +1113,12 @@ function openOrderReviewModal(i) {
       document.getElementById('reviewItems').innerHTML = rows || '<tr><td class="px-3 py-2" colspan="4">No items</td></tr>';
     } catch (_e) {
       const rows = (o.items || []).map(it => {
-        // Handle nested product_id object structure
-        const name = it.product_name || (it.product_id && it.product_id.name) || it.name || ('#' + (it.product_id && it.product_id._id || it.product_id));
+        // Handle different product name sources
+        const name = it.product_name || 
+                    it.name || 
+                    (it.product_id && it.product_id.name) || 
+                    (it.product_details && it.product_details.name) ||
+                    'Unknown Product';
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || (it.product_id && it.product_id.price) || it.price || 0);
         const total = Number(it.total_price || (qty * price));
@@ -1846,10 +1854,15 @@ function showReceipt(order) {
         }
       }
       const rows = items.map(it => {
-        const name = it.name || ('#' + it.product_id);
+        // Handle different product name sources
+        const name = it.product_name || 
+                    it.name || 
+                    (it.product_id && it.product_id.name) || 
+                    (it.product_details && it.product_details.name) ||
+                    'Unknown Product';
         const qty = Number(it.quantity || 0);
-        const price = Number(it.price || 0);
-        const total = qty * price;
+        const price = Number(it.unit_price || it.price || 0);
+        const total = Number(it.total_price || (qty * price));
         return `<tr>
           <td class="px-3 py-2">${name}</td>
           <td class="px-3 py-2 text-right">${qty}</td>
