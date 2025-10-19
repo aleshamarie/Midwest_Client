@@ -1723,14 +1723,14 @@ function computeLowStock() {
   return products.filter(p => Number(p.stock || 0) < getLowStockThreshold(p));
 }
 
-function toggleLowStockModal() {
+async function toggleLowStockModal() {
   console.log('toggleLowStockModal called');
   const modal = document.getElementById('lowStockModal');
   console.log('Low stock modal element:', modal);
   if (modal) {
     if (modal.classList.contains('hidden')) {
       // open and populate
-      renderLowStockModalList(showAllLowStockInModal);
+      await renderLowStockModalList(showAllLowStockInModal);
       modal.classList.remove('hidden');
       console.log('Low stock modal should be visible now');
     } else {
@@ -1742,19 +1742,64 @@ function toggleLowStockModal() {
   }
 }
 
-function renderLowStockModalList(showAll) {
-  const low = computeLowStock();
+async function renderLowStockModalList(showAll) {
   const list = document.getElementById('lowStockModalList');
-  if (!low.length) { list.innerHTML = '<li>No low stock items</li>'; return; }
-  const items = showAll ? low : low.slice(0, LOW_STOCK_MODAL_LIMIT);
-  const extra = Math.max(low.length - items.length, 0);
-  const itemsHtml = items.map(p => `<li>${p.name} — ${p.stock} left</li>`).join('');
-  const controlHtml = extra > 0
-    ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=true;renderLowStockModalList(true)">Show all (${extra} more)</button></li>`
-    : (showAll && low.length > LOW_STOCK_MODAL_LIMIT
-        ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=false;renderLowStockModalList(false)">Show less</button></li>`
-        : '');
-  list.innerHTML = itemsHtml + controlHtml;
+  
+  try {
+    // Use API data instead of local computation
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/low-stock?threshold=5`, {
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const low = data.products || [];
+      
+      if (!low.length) { 
+        list.innerHTML = '<li>No low stock items</li>'; 
+        return; 
+      }
+      
+      const items = showAll ? low : low.slice(0, LOW_STOCK_MODAL_LIMIT);
+      const extra = Math.max(low.length - items.length, 0);
+      const itemsHtml = items.map(p => `<li>${p.name} — ${p.stock} left</li>`).join('');
+      const controlHtml = extra > 0
+        ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=true;renderLowStockModalList(true)">Show all (${extra} more)</button></li>`
+        : (showAll && low.length > LOW_STOCK_MODAL_LIMIT
+            ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=false;renderLowStockModalList(false)">Show less</button></li>`
+            : '');
+      list.innerHTML = itemsHtml + controlHtml;
+    } else {
+      // Fallback to local computation
+      const low = computeLowStock();
+      if (!low.length) { list.innerHTML = '<li>No low stock items</li>'; return; }
+      const items = showAll ? low : low.slice(0, LOW_STOCK_MODAL_LIMIT);
+      const extra = Math.max(low.length - items.length, 0);
+      const itemsHtml = items.map(p => `<li>${p.name} — ${p.stock} left</li>`).join('');
+      const controlHtml = extra > 0
+        ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=true;renderLowStockModalList(true)">Show all (${extra} more)</button></li>`
+        : (showAll && low.length > LOW_STOCK_MODAL_LIMIT
+            ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=false;renderLowStockModalList(false)">Show less</button></li>`
+            : '');
+      list.innerHTML = itemsHtml + controlHtml;
+    }
+  } catch (error) {
+    console.error('Failed to load low stock items for modal:', error);
+    // Fallback to local computation
+    const low = computeLowStock();
+    if (!low.length) { list.innerHTML = '<li>No low stock items</li>'; return; }
+    const items = showAll ? low : low.slice(0, LOW_STOCK_MODAL_LIMIT);
+    const extra = Math.max(low.length - items.length, 0);
+    const itemsHtml = items.map(p => `<li>${p.name} — ${p.stock} left</li>`).join('');
+    const controlHtml = extra > 0
+      ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=true;renderLowStockModalList(true)">Show all (${extra} more)</button></li>`
+      : (showAll && low.length > LOW_STOCK_MODAL_LIMIT
+          ? `<li class="mt-2"><button class="text-blue-600" onclick="showAllLowStockInModal=false;renderLowStockModalList(false)">Show less</button></li>`
+          : '');
+    list.innerHTML = itemsHtml + controlHtml;
+  }
 }
 
 // --------------------------- RECEIPT FUNCTIONS ---------------------------
