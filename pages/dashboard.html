@@ -27,11 +27,11 @@
           <button onclick="setOrdersStatusFilter('all')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
             Total Orders: <span id="ordersNavTotal" class="font-semibold">0</span>
           </button>
-          <button onclick="setOrdersStatusFilter('pending')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
-            Pending Orders: <span id="ordersNavPending" class="font-semibold">0</span>
+          <button onclick="setOrdersStatusFilter('pending')" class="w-full text-left text-xs px-3 py-1 bg-yellow-500/20 hover:bg-yellow-500/30 rounded border-l-2 border-yellow-400">
+            ⏳ Pending Orders: <span id="ordersNavPending" class="font-semibold">0</span>
           </button>
-          <button onclick="setOrdersStatusFilter('processing')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
-            Processing Orders: <span id="ordersNavProcessing" class="font-semibold">0</span>
+          <button onclick="setOrdersStatusFilter('processing')" class="w-full text-left text-xs px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 rounded border-l-2 border-blue-400">
+            🔄 Processing Orders: <span id="ordersNavProcessing" class="font-semibold">0</span>
           </button>
           <button onclick="setOrdersStatusFilter('completed')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
             Completed Orders: <span id="ordersNavCompleted" class="font-semibold">0</span>
@@ -173,13 +173,13 @@
             <div class="text-xs text-gray-500">Total Orders</div>
             <div id="ordersTotalCount" class="text-xl font-semibold">0</div>
           </button>
-          <button onclick="setOrdersStatusFilter('pending')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
-            <div class="text-xs text-gray-500">Pending Orders</div>
-            <div id="ordersPendingCount" class="text-xl font-semibold">0</div>
+          <button onclick="setOrdersStatusFilter('pending')" class="bg-yellow-50 border-2 border-yellow-200 rounded p-3 text-left hover:bg-yellow-100">
+            <div class="text-xs text-yellow-700 font-medium">⏳ Pending Orders</div>
+            <div id="ordersPendingCount" class="text-xl font-bold text-yellow-800">0</div>
           </button>
-          <button onclick="setOrdersStatusFilter('processing')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
-            <div class="text-xs text-gray-500">Processing Orders</div>
-            <div id="ordersProcessingCount" class="text-xl font-semibold">0</div>
+          <button onclick="setOrdersStatusFilter('processing')" class="bg-blue-50 border-2 border-blue-200 rounded p-3 text-left hover:bg-blue-100">
+            <div class="text-xs text-blue-700 font-medium">🔄 Processing Orders</div>
+            <div id="ordersProcessingCount" class="text-xl font-bold text-blue-800">0</div>
           </button>
           <button onclick="setOrdersStatusFilter('completed')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
             <div class="text-xs text-gray-500">Completed Orders</div>

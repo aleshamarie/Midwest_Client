@@ -751,6 +751,27 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 
+// --------------------------- DATE FORMATTING ---------------------------
+// Cache bust: 2025-01-19 - Fixed timezone issue
+function formatOrderDate(dateString) {
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) {
+      return 'Invalid Date';
+    }
+    
+    // Use UTC methods to avoid timezone issues
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    
+    return `${month}/${day}/${year}`;
+  } catch (error) {
+    console.error('Error formatting date:', dateString, error);
+    return 'Invalid Date';
+  }
+}
+
 // --------------------------- ORDERS ---------------------------
 function renderOrders() {
   if (!ordersDT) {
@@ -759,7 +780,7 @@ function renderOrders() {
       searching: true,
       info: true,
       dom: 'ltip',
-      order: [[0, 'desc']],
+      order: [], // Disable default sorting - we'll pre-sort the data
       columns: [
         { title: 'Order ID' },
         { title: 'Customer' },
@@ -774,6 +795,7 @@ function renderOrders() {
         { title: 'Actions', orderable: false }
       ]
     });
+    
     // Wire custom search input & move length
     const oSearch = document.getElementById('ordersSearch');
     if (oSearch) oSearch.addEventListener('input', () => ordersDT.search(oSearch.value).draw());
@@ -818,13 +840,55 @@ function renderOrders() {
   if (navCompletedEl) navCompletedEl.textContent = completedCount;
   if (navCancelledEl) navCancelledEl.textContent = cancelledCount;
 
-  orders.filter(o => matchesDate(o.createdAt)).forEach((o, i) => {
+  // Prioritize orders: pending and processing first, then others
+  const filteredOrders = orders.filter(o => matchesDate(o.createdAt));
+  console.log('Total orders before prioritization:', filteredOrders.length);
+  console.log('Order statuses:', filteredOrders.map(o => o.status));
+  
+  const prioritizedOrders = filteredOrders.sort((a, b) => {
+    const statusA = (a.status || '').toLowerCase();
+    const statusB = (b.status || '').toLowerCase();
+    
+    // Priority order: pending > processing > completed > cancelled
+    const priorityOrder = { 'pending': 0, 'processing': 1, 'completed': 2, 'cancelled': 3 };
+    const priorityA = priorityOrder[statusA] !== undefined ? priorityOrder[statusA] : 4;
+    const priorityB = priorityOrder[statusB] !== undefined ? priorityOrder[statusB] : 4;
+    
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+    
+    // If same priority, sort by date (newest first)
+    const dateA = new Date(a.createdAt || 0);
+    const dateB = new Date(b.createdAt || 0);
+    return dateB - dateA;
+  });
+  
+
+  prioritizedOrders.forEach((o, i) => {
     const paymentCell = `${o.payment}${o.payment === 'GCash' && o.ref ? `<div class="text-xs text-blue-600">Ref: ${o.ref}</div>` : ''}`;
     const status = (o.status || '').toLowerCase();
     const itemsHtml = Array.isArray(o.items) && o.items.length
       ? `<div class="text-xs text-gray-600 mt-1">${o.items.map(it => `${it.name || ('#'+it.product_id)} × ${it.quantity}`).join(', ')}</div>`
       : '';
     let actionsHtml = '';
+    
+    // Add visual priority indicators
+    let statusClass = '';
+    let statusIcon = '';
+    if (status === 'pending') {
+      statusClass = 'bg-yellow-100 text-yellow-800 font-semibold';
+      statusIcon = '⏳';
+    } else if (status === 'processing') {
+      statusClass = 'bg-blue-100 text-blue-800 font-semibold';
+      statusIcon = '🔄';
+    } else if (status === 'completed') {
+      statusClass = 'bg-green-100 text-green-800';
+      statusIcon = '✅';
+    } else if (status === 'cancelled') {
+      statusClass = 'bg-red-100 text-red-800';
+      statusIcon = '❌';
+    }
     
     if (status === 'completed') {
       actionsHtml = `<button onclick="showReceipt(orders[${i}])" class="text-green-600">Receipt</button>`;
@@ -850,12 +914,67 @@ function renderOrders() {
       `₱${o.discount.toFixed(2)}`,
       `₱${o.netTotal.toFixed(2)}`,
       paymentCell,
-      (o.createdAt ? new Date(o.createdAt).toLocaleDateString() : ''),
-      o.status || '-',
+      (o.createdAt ? formatOrderDate(o.createdAt) : (o.date ? formatOrderDate(o.date) : (o.created_at ? formatOrderDate(o.created_at) : new Date().toLocaleDateString()))),
+      `<span class="px-2 py-1 rounded text-xs ${statusClass}">${statusIcon} ${o.status || '-'}</span>`,
       actionsHtml
     ]);
   });
+  // Force DataTable to redraw with our prioritized data
   ordersDT.draw(false);
+  
+  // Ensure the table shows our prioritized order by disabling DataTable's internal sorting
+  ordersDT.order([]).draw();
+  
+}
+
+// Function to add test orders for demonstration
+function addTestOrders() {
+  const testOrders = [
+    {
+      id: 'TEST001',
+      displayId: 'TEST001',
+      customer: 'Test Pending Customer',
+      contact: '09123456789',
+      address: 'Test Address',
+      total: 100.00,
+      discount: 0.00,
+      netTotal: 100.00,
+      status: 'Pending',
+      type: 'Online',
+      payment: 'Cash',
+      ref: '',
+      items: [{ name: 'Test Product', quantity: 1, unit_price: 100.00, total_price: 100.00 }],
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    },
+    {
+      id: 'TEST002',
+      displayId: 'TEST002',
+      customer: 'Test Processing Customer',
+      contact: '09123456788',
+      address: 'Test Address 2',
+      total: 150.00,
+      discount: 10.00,
+      netTotal: 140.00,
+      status: 'Processing',
+      type: 'Online',
+      payment: 'GCash',
+      ref: 'GCASH123456',
+      items: [{ name: 'Test Product 2', quantity: 2, unit_price: 75.00, total_price: 150.00 }],
+      createdAt: new Date().toISOString(),
+      created_at: new Date().toISOString()
+    }
+  ];
+  
+  // Add test orders to the beginning of the orders array
+  orders.unshift(...testOrders);
+  localStorage.setItem('orders', JSON.stringify(orders));
+  
+  // Refresh the orders display
+  renderOrders();
+  updateDashboard();
+  
+  console.log('Test orders added:', testOrders);
 }
 
 function openAddOrderModal() {
@@ -1943,7 +2062,7 @@ async function loadFromBackend() {
     // No need to load them here
 
     suppliers = (suppliersRes.suppliers || []).map(s => ({ id: s.id, name: s.name, contact: s.contact, items: s.items || [], lastDelivery: s.last_delivery || null }));
-    orders = (ordersRes.orders || []).map(o => ({ id: o.id, displayId: o.order_code || `ORD${o.id}`, customer: o.name, contact: o.contact, address: o.address, total: Number(o.totalPrice || 0), discount: Number(o.discount || 0), netTotal: Number(o.net_total || 0), status: o.status, type: o.type, payment: o.payment, ref: o.ref, createdAt: o.created_at }));
+    orders = (ordersRes.orders || []).map(o => ({ id: o.id, displayId: o.order_code || `ORD${o.id}`, customer: o.name, contact: o.contact, address: o.address, total: Number(o.totalPrice || 0), discount: Number(o.discount || 0), netTotal: Number(o.net_total || 0), status: o.status, type: o.type, payment: o.payment, ref: o.ref, createdAt: o.createdAt }));
 
     localStorage.setItem('suppliers', JSON.stringify(suppliers));
     localStorage.setItem('orders', JSON.stringify(orders));
@@ -2028,7 +2147,7 @@ async function refreshOrdersOnly() {
     if (!r.ok) throw new Error('orders');
     ordersRes = await r.json();
   }
-  orders = (ordersRes.orders || []).map(o => ({ id: o.id, displayId: o.order_code || `ORD${o.id}`, customer: o.name, contact: o.contact, address: o.address, total: Number(o.totalPrice || 0), discount: Number(o.discount || 0), netTotal: Number(o.net_total || 0), status: o.status, type: o.type, payment: o.payment, ref: o.ref, createdAt: o.created_at }));
+  orders = (ordersRes.orders || []).map(o => ({ id: o.id, displayId: o.order_code || `ORD${o.id}`, customer: o.name, contact: o.contact, address: o.address, total: Number(o.totalPrice || 0), discount: Number(o.discount || 0), netTotal: Number(o.net_total || 0), status: o.status, type: o.type, payment: o.payment, ref: o.ref, createdAt: o.createdAt }));
   localStorage.setItem('orders', JSON.stringify(orders));
   renderOrders();
   updateDashboard();
