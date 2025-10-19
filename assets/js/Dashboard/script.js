@@ -231,9 +231,17 @@ function renderInventory() {
           orderable: false,
           data: null,
           render: function(data, type, row) {
-            return row.image_url ? 
-              `<img src="${row.image_url}" alt="${row.name}" class="w-12 h-12 object-cover rounded" onerror="this.src='../assets/images/Midwest.jpg'">` :
-              `<img src="../assets/images/Midwest.jpg" alt="Midwest Grocery" class="w-12 h-12 object-cover rounded">`;
+            const baseUrl = window.APP_CONFIG.API_BASE_URL;
+            const imageUrl = row.image_url ? `${baseUrl}${row.image_url}` : '../assets/images/Midwest.jpg';
+            const placeholderUrl = row.placeholder_url ? `${baseUrl}${row.placeholder_url}` : '../assets/images/Midwest.jpg';
+            const productName = row.name || 'Product';
+            
+            return `<img src="${placeholderUrl}" 
+                         data-src="${imageUrl}" 
+                         class="lazy-image w-12 h-12 object-cover rounded" 
+                         alt="${productName}"
+                         loading="lazy"
+                         onerror="this.src='../assets/images/Midwest.jpg'">`;
           }
         },
         { 
@@ -287,26 +295,20 @@ function renderInventory() {
       serverSide: false,
       processing: false,
       ajax: {
-        url: `${window.APP_CONFIG.API_BASE_URL}/products`,
+        url: `${window.APP_CONFIG.API_BASE_URL}/products/lazy`,
         type: 'GET',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
         },
         data: function(d) {
-          const page = Math.max(1, Math.floor((d.start || 0) / (d.length || 25)) + 1);
-          const pageSize = Math.max(1, d.length || 25);
           const search = d.search?.value || '';
           
           console.log('DataTables Ajax request:', {
             url: `${window.APP_CONFIG.API_BASE_URL}/products`,
-            page: page,
-            pageSize: pageSize,
             search: search
           });
           
           return {
-            page: page,
-            pageSize: pageSize,
             search: search
           };
         },
@@ -324,7 +326,7 @@ function renderInventory() {
         dataSrc: function(json) {
           console.log('DataTables response received:', json);
           
-          // Return the products array directly for client-side processing
+          // For client-side processing, return the products array directly
           return json.products || [];
         }
       },
