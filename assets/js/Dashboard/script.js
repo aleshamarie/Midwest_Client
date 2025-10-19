@@ -432,13 +432,28 @@ async function deleteProductFromTable(productId) {
   if (!isConfirmed) return;
   
   try {
-    // For now, just refresh the table
-    // In a real app, you'd call a DELETE API endpoint
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to delete product');
+    }
+    
+    const result = await response.json();
+    console.log('Product deletion result:', result);
+    
+    // Refresh the table
     inventoryDT.ajax.reload();
-    Swal.fire({ icon: 'success', title: 'Product deleted successfully' });
+    Swal.fire({ icon: 'success', title: 'Product deleted successfully', text: `Deleted: ${result.deletedProduct?.name || 'Product'}` });
   } catch (error) {
     console.error('Failed to delete product:', error);
-    Swal.fire({ icon: 'error', title: 'Failed to delete product' });
+    Swal.fire({ icon: 'error', title: 'Failed to delete product', text: String(error.message || '') });
   }
 }
 
