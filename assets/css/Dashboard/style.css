@@ -1,0 +1,95 @@
+.hidden {
+  display: none;
+}
+
+/* Inventory controls layout */
+#inventoryControls input {
+  max-width: 360px;
+}
+
+/* Controls layout for other tables */
+#ordersControls input,
+#suppliersControls input {
+  max-width: 360px;
+}
+
+
+/* DataTables - align with Tailwind-like system appearance */
+table.dataTable thead th {
+  background-color: #f3f4f6; /* gray-100 */
+  color: #374151; /* gray-700 */
+  font-weight: 600;
+}
+
+table.dataTable tbody tr:nth-child(even) {
+  background-color: #fafafa;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  border: 1px solid #e5e7eb; /* gray-200 */
+  background: #fff;
+  color: #374151 !important;
+  padding: 4px 10px;
+  margin: 0 2px;
+  border-radius: 6px;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current,
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+  background: #10b981; /* green-500 */
+  color: #fff !important;
+  border-color: #10b981;
+}
+
+.dataTables_wrapper .dataTables_length select,
+.dataTables_wrapper .dataTables_filter input,
+.dataTables_wrapper .dataTables_info {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+
+.dataTables_wrapper .dataTables_info {
+  border: none;
+  padding-left: 0;
+  color: #6b7280; /* gray-500 */
+}
+
+
+ /* Lazy loading styles */
+ .lazy-image {
+  opacity: 0.7;
+  transition: opacity 0.3s;
+}
+.lazy-image.loaded {
+  opacity: 1;
+}
+.loading-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+/* Hide total count display */
+.dataTables_info {
+  display: none !important;
+}
+
+ /* Receipt styling */
+ #receiptContent .rc-header { display: flex; align-items: center; gap: 12px; }
+ #receiptContent .rc-brand { font-weight: 700; font-size: 18px; }
+ #receiptContent .rc-meta { font-size: 12px; color: #6b7280; }
+ #receiptContent .rc-section { margin-top: 12px; border-top: 1px solid #e5e7eb; padding-top: 12px; }
+ #receiptContent table { width: 100%; border-collapse: collapse; }
+ #receiptContent th, #receiptContent td { padding: 6px 8px; }
+ #receiptContent th { background: #f3f4f6; text-align: left; font-weight: 600; font-size: 13px; }
+ #receiptContent td.num, #receiptContent th.num { text-align: right; }
+ #receiptContent .rc-total-row td { font-weight: 600; }
+ @media print { .no-print { display: none !important; } }

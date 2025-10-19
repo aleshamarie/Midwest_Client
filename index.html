@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Midwest Grocery - Admin Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen bg-gray-100 flex items-center justify-center">
+  <div class="bg-white w-full max-w-md p-6 rounded-lg shadow">
+    <div class="flex justify-center mb-2">
+      <img src="./assets/images/Midwest.jpg" alt="Midwest Grocery" class="h-24 w-auto rounded" />
+    </div>
+    <p class="text-gray-500 text-center mb-6">Admin Login</p>
+    <form id="loginForm" class="space-y-4">
+      <div>
+        <label class="block text-sm mb-1">Email</label>
+        <input id="email" type="email" class="w-full border rounded px-3 py-2" placeholder="admin@midwest.local" required />
+      </div>
+      <div>
+        <label class="block text-sm mb-1">Password</label>
+        <input id="password" type="password" class="w-full border rounded px-3 py-2" placeholder="••••••••" required />
+      </div>
+      <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded">Sign In</button>
+      <p id="loginError" class="text-red-600 text-sm text-center hidden">Invalid credentials</p>
+    </form>
+    
+  </div>
+
+  <script src="./assets/js/Config/config.js"></script>
+  <script src="./assets/js/Login/login.js"></script>
+  
+</body>
+</html>
+

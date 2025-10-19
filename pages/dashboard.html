@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory & Orders Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+  <link rel="stylesheet" href="../assets/css/Dashboard/style.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body class="bg-gray-100">
+
+<div class="flex h-screen">
+  <!-- SIDEBAR -->
+  <aside class="bg-green-600 text-white w-64 p-4">
+    <h1 class="text-2xl font-bold mb-6">Midwest Grocery Store</h1>
+    <ul>
+      <li><button onclick="showSection('dashboardSection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">🏠 Dashboard</button></li>
+      <li><button onclick="showSection('inventorySection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">📦 Inventory</button></li>
+      <li>
+        <button onclick="showSection('ordersSection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">📜 Orders</button>
+        <div class="pl-4 space-y-1 mb-2">
+          <button onclick="setOrdersStatusFilter('all')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
+            Total Orders: <span id="ordersNavTotal" class="font-semibold">0</span>
+          </button>
+          <button onclick="setOrdersStatusFilter('pending')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
+            Pending Orders: <span id="ordersNavPending" class="font-semibold">0</span>
+          </button>
+          <button onclick="setOrdersStatusFilter('processing')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
+            Processing Orders: <span id="ordersNavProcessing" class="font-semibold">0</span>
+          </button>
+          <button onclick="setOrdersStatusFilter('completed')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
+            Completed Orders: <span id="ordersNavCompleted" class="font-semibold">0</span>
+          </button>
+          <button onclick="setOrdersStatusFilter('cancelled')" class="w-full text-left text-xs px-3 py-1 bg-white/10 hover:bg-white/20 rounded">
+            Cancelled Orders: <span id="ordersNavCancelled" class="font-semibold">0</span>
+          </button>
+        </div>
+      </li>
+      <li><button onclick="showSection('suppliersSection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">🚚 Suppliers</button></li>
+    </ul>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="flex-1 p-6 overflow-auto">
+    <!-- HEADER -->
+    <header class="flex justify-between items-center mb-6">
+      <div class="flex items-center gap-2 w-1/2">
+        <input type="date" id="dateFilter" class="border rounded px-3 py-2" title="Filter by date" onchange="onDateFilterChange(this.value)">
+      </div>
+      <div class="flex items-center gap-6">
+        <span id="currentDate" class="text-gray-500"></span>
+        <button class="relative" onclick="toggleLowStockModal()">
+          🔔
+          <span id="notifCount" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1 rounded-full">0</span>
+        </button>
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 bg-gray-300 rounded-full"></div>
+          <span id="userName" class="font-semibold"></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section id="dashboardSection">
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-white p-4 rounded shadow">
+          <div class="flex justify-between items-center">
+            <div>
+              <h3 class="text-gray-500">Total Sales</h3>
+              <p id="totalSales" class="text-2xl font-bold">₱0.00</p>
+            </div>
+            <span class="text-3xl">₱</span>
+          </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+          <div class="flex justify-between items-center">
+            <div>
+              <h3 class="text-gray-500">Orders</h3>
+              <p id="totalOrders" class="text-2xl font-bold">0</p>
+            </div>
+            <span class="text-3xl">🛒</span>
+          </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+          <div class="flex justify-between items-center">
+            <div>
+              <h3 class="text-gray-500">Customers</h3>
+              <p id="totalCustomers" class="text-2xl font-bold">0</p>
+            </div>
+            <span class="text-3xl">👥</span>
+          </div>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+          <div class="flex justify-between items-center">
+            <div>
+              <h3 class="text-gray-500">Low Stock Items</h3>
+              <p id="lowStockCount" class="text-2xl font-bold">0</p>
+              <a href="#" onclick="showSection('inventorySection')" class="text-blue-500 text-sm">View inventory</a>
+            </div>
+            <span class="text-3xl">⚠️</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- CHART -->
+      <div class="grid grid-cols-3 gap-4">
+        <div class="col-span-2 bg-white p-4 rounded shadow">
+          <h3 class="font-semibold mb-4">Sales Overview</h3>
+          <canvas id="salesChart" height="100"></canvas>
+        </div>
+        <div class="bg-white p-4 rounded shadow">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-semibold">Low Stock Items</h3>
+            <button onclick="loadAllLowStockItems()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
+              Load All Items
+            </button>
+          </div>
+          <ul id="lowStockList" class="text-gray-700 max-h-80 overflow-y-auto"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- INVENTORY -->
+    <section id="inventorySection" class="hidden">
+      <div class="bg-white p-4 rounded-lg shadow mb-6">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold">Inventory</h2>
+          <div class="space-x-2">
+            <button onclick="openAddProductModal()" class="bg-green-600 text-white px-4 py-1 rounded">+ Add Product</button>
+            <button onclick="showSection('suppliersSection')" class="bg-indigo-600 text-white px-4 py-1 rounded">Suppliers</button>
+            <button onclick="exportInventoryCSV()" class="bg-gray-700 text-white px-4 py-1 rounded" title="Download CSV/Excel">Download CSV</button>
+            <button onclick="exportInventoryPDF()" class="bg-gray-700 text-white px-4 py-1 rounded" title="Download PDF">Download PDF</button>
+          </div>
+        </div>
+        <div id="inventoryControls" class="flex items-center justify-between mb-3">
+          <input id="inventorySearch" type="text" placeholder="Search inventory..." title="Search inventory" class="border p-2 rounded w-1/3">
+          <div class="flex items-center space-x-2">
+            <div id="inventoryControlsLength"></div>
+          </div>
+        </div>
+        <table class="min-w-full text-sm text-gray-600" id="inventoryTable">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="px-4 py-2 text-left">Image</th>
+              <th class="px-4 py-2 text-left">Product</th>
+              <th class="px-4 py-2">Category</th>
+              <th class="px-4 py-2">Description</th>
+              <th class="px-4 py-2">Price</th>
+              <th class="px-4 py-2">Stock</th>
+              <th class="px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ORDERS -->
+    <section id="ordersSection" class="hidden">
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="flex justify-between mb-4">
+          <h2 class="text-lg font-semibold">Orders</h2>
+          <button onclick="openAddOrderModal()" class="bg-blue-600 text-white px-4 py-1 rounded">+ Add Order</button>
+        </div>
+        <!-- Orders Stats -->
+        <div class="grid grid-cols-4 gap-4 mb-4">
+          <button onclick="setOrdersStatusFilter('all')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
+            <div class="text-xs text-gray-500">Total Orders</div>
+            <div id="ordersTotalCount" class="text-xl font-semibold">0</div>
+          </button>
+          <button onclick="setOrdersStatusFilter('pending')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
+            <div class="text-xs text-gray-500">Pending Orders</div>
+            <div id="ordersPendingCount" class="text-xl font-semibold">0</div>
+          </button>
+          <button onclick="setOrdersStatusFilter('processing')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
+            <div class="text-xs text-gray-500">Processing Orders</div>
+            <div id="ordersProcessingCount" class="text-xl font-semibold">0</div>
+          </button>
+          <button onclick="setOrdersStatusFilter('completed')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
+            <div class="text-xs text-gray-500">Completed Orders</div>
+            <div id="ordersCompletedCount" class="text-xl font-semibold">0</div>
+          </button>
+          <button onclick="setOrdersStatusFilter('cancelled')" class="bg-gray-50 rounded p-3 text-left hover:bg-gray-100">
+            <div class="text-xs text-gray-500">Cancelled Orders</div>
+            <div id="ordersCancelledCount" class="text-xl font-semibold">0</div>
+          </button>
+        </div>
+        <div id="ordersControls" class="flex items-center justify-between mb-3">
+          <input id="ordersSearch" type="text" placeholder="Search orders..." title="Search orders" class="border p-2 rounded w-1/3">
+          <div id="ordersControlsLength"></div>
+        </div>
+        <table class="min-w-full text-sm text-gray-600" id="ordersTable">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="px-4 py-2 text-left">Order ID</th>
+              <th class="px-4 py-2">Customer</th>
+              <th class="px-4 py-2">Contact</th>
+              <th class="px-4 py-2">Address</th>
+              <th class="px-4 py-2">Total</th>
+              <th class="px-4 py-2">Discount</th>
+              <th class="px-4 py-2">Net Total</th>
+              <th class="px-4 py-2">Payment</th>
+              <th class="px-4 py-2">Date</th>
+              <th class="px-4 py-2">Status</th>
+              <th class="px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- LOW STOCK ITEMS -->
+    <section id="lowStockSection" class="hidden">
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold">All Low Stock Items</h2>
+          <div class="flex gap-2">
+            <div class="flex items-center gap-1">
+              <label for="lowStockThreshold" class="text-sm text-gray-600">Threshold:</label>
+              <input type="number" id="lowStockThreshold" placeholder="5" value="5" 
+                     class="border rounded px-3 py-1 w-20" title="Stock threshold">
+            </div>
+            <button onclick="loadAllLowStockItems()" class="bg-blue-600 text-white px-4 py-1 rounded">Load All</button>
+            <button onclick="showSection('dashboardSection')" class="bg-gray-500 text-white px-4 py-1 rounded">Back to Dashboard</button>
+          </div>
+        </div>
+        
+        <!-- Summary Cards -->
+        <div id="lowStockSummary" class="grid grid-cols-3 gap-4 mb-4 hidden">
+          <div class="bg-gray-50 rounded p-3 text-center">
+            <div class="text-xs text-gray-500">Total Items</div>
+            <div id="totalLowStockCount" class="text-xl font-semibold">0</div>
+          </div>
+          <div class="bg-red-50 rounded p-3 text-center">
+            <div class="text-xs text-gray-500">Out of Stock</div>
+            <div id="outOfStockCount" class="text-xl font-semibold text-red-600">0</div>
+          </div>
+          <div class="bg-yellow-50 rounded p-3 text-center">
+            <div class="text-xs text-gray-500">Low Stock</div>
+            <div id="lowStockCount" class="text-xl font-semibold text-yellow-600">0</div>
+          </div>
+        </div>
+        
+        <div id="lowStockControls" class="flex items-center justify-between mb-3">
+          <input id="lowStockSearch" type="text" placeholder="Search low stock items..." 
+                 class="border p-2 rounded w-1/3" title="Search low stock items">
+          <div id="lowStockControlsLength"></div>
+        </div>
+        
+        <div id="lowStockGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Low stock items will be loaded here -->
+        </div>
+        
+        <div id="lowStockLoading" class="text-center py-8 hidden">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+          <p class="mt-2 text-gray-600">Loading low stock items...</p>
+        </div>
+        
+        <div id="noLowStockMessage" class="text-center py-8 hidden">
+          <p class="text-gray-500">No low stock items found</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SUPPLIERS -->
+    <section id="suppliersSection" class="hidden">
+      <div class="bg-white p-4 rounded-lg shadow">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold">Suppliers</h2>
+          <div class="space-x-2">
+            <button onclick="openAddSupplierModal()" class="bg-yellow-600 text-white px-4 py-1 rounded">+ Add Supplier</button>
+            <button onclick="exportSuppliersCSV()" class="bg-gray-700 text-white px-4 py-1 rounded" title="Download CSV/Excel">Download CSV</button>
+            <button onclick="exportSuppliersPDF()" class="bg-gray-700 text-white px-4 py-1 rounded" title="Download PDF">Download PDF</button>
+          </div>
+        </div>
+        <div id="suppliersControls" class="flex items-center justify-between mb-3">
+          <input id="suppliersSearch" type="text" placeholder="Search suppliers..." title="Search suppliers" class="border p-2 rounded w-1/3">
+          <div id="suppliersControlsLength"></div>
+        </div>
+        <table class="min-w-full text-sm text-gray-600" id="suppliersTable">
+          <thead>
+            <tr class="bg-gray-100">
+              <th class="px-4 py-2 text-left">Supplier</th>
+              <th class="px-4 py-2">Contact</th>
+              <th class="px-4 py-2">Items Supplied</th>
+              <th class="px-4 py-2">Last Delivery</th>
+              <th class="px-4 py-2">Actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- PRODUCT MODAL -->
+    <div id="productModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[500px] rounded-lg shadow-lg">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-green-100 text-green-700">📦</div>
+          <h2 id="productModalTitle" class="text-lg font-semibold">Add Product</h2>
+        </div>
+        <div class="px-6 pt-4 pb-2">
+          <label class="block text-sm text-gray-600 mb-1" for="prodName">Product Name</label>
+          <input type="text" id="prodName" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., 1 Peso Candy">
+
+          <label class="block text-sm text-gray-600 mb-1" for="prodCategory">Category</label>
+          <input type="text" id="prodCategory" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Candies">
+
+          <label class="block text-sm text-gray-600 mb-1" for="prodDescription">Description</label>
+          <textarea id="prodDescription" rows="3" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Fresh, sweet, and delicious candy perfect for any occasion"></textarea>
+
+          <!-- Product Image Section -->
+          <div class="mb-3">
+            <label class="block text-sm text-gray-600 mb-2">Product Image</label>
+            <div id="productImageContainer" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              <div id="productImagePreview" class="mb-2">
+                <img id="productImagePreviewImg" src="../assets/images/Midwest.jpg" alt="Product preview" class="mx-auto max-h-32 max-w-32 object-contain rounded">
+                <button type="button" onclick="removeProductImage()" class="mt-2 text-red-600 text-sm hover:text-red-800">Remove Image</button>
+              </div>
+              <div id="productImageUpload" class="cursor-pointer hidden">
+                <div class="text-gray-400 mb-2">📷</div>
+                <div class="text-sm text-gray-600">Click to upload image</div>
+                <div class="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP (max 5MB)</div>
+              </div>
+              <input type="file" id="productImageInput" accept="image/*" class="hidden" onchange="handleProductImageSelect(event)" aria-label="Product image upload">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="prodPrice">Price</label>
+              <div class="flex items-stretch border rounded overflow-hidden focus-within:ring-2 focus-within:ring-green-500">
+                <span class="px-3 py-2 bg-gray-50 text-gray-600 select-none">₱</span>
+                <input type="number" id="prodPrice" step="0.01" class="flex-1 px-3 py-2 outline-none" placeholder="0.00">
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="prodStock">Stock</label>
+              <input type="number" id="prodStock" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0">
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <button onclick="closeProductModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</button>
+          <button onclick="saveProduct()" class="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDER MODAL -->
+    <div id="orderModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[520px] rounded-lg shadow-lg">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-blue-100 text-blue-700">🛒</div>
+          <h2 id="orderModalTitle" class="text-lg font-semibold">Add Order</h2>
+        </div>
+        <div class="px-6 pt-4 pb-2">
+          <label class="block text-sm text-gray-600 mb-1" for="orderCustomer">Customer Name</label>
+          <input type="text" id="orderCustomer" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g., Jane Smith">
+
+          <div class="grid grid-cols-2 gap-3 mb-3">
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="orderContact">Contact</label>
+              <input type="text" id="orderContact" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Phone or Email">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="orderTotal">Total Amount</label>
+              <div class="flex items-stretch border rounded overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
+                <span class="px-3 py-2 bg-gray-50 text-gray-600 select-none">₱</span>
+                <input type="number" id="orderTotal" step="0.01" class="flex-1 px-3 py-2 outline-none" placeholder="0.00">
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="block text-sm text-gray-600 mb-1" for="orderAddress">Address</label>
+            <textarea id="orderAddress" rows="2" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Delivery address (optional)"></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="orderDiscount">Discount</label>
+              <input type="text" id="orderDiscount" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="₱ or % (e.g., 50 or 10%)">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="orderStatus">Status</label>
+              <select id="orderStatus" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" title="Order status">
+                <option>Pending</option>
+                <option>Processing</option>
+                <option>Completed</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 mt-3">
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="orderType">Type</label>
+              <select id="orderType" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" title="Order type">
+                <option>Online</option>
+                <option>In-Store</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="orderPayment">Payment</label>
+              <select id="orderPayment" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500" title="Payment method" onchange="toggleRefInput()">
+                <option>Cash</option>
+                <option>GCash</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="mt-3">
+            <input type="text" id="orderRef" placeholder="GCash Reference Number" class="border rounded w-full px-3 py-2 hidden focus:outline-none focus:ring-2 focus:ring-blue-500">
+          </div>
+
+          <!-- Order Items Section -->
+          <div class="mt-6 border-t pt-4">
+            <div class="flex justify-between items-center mb-3">
+              <h3 class="text-lg font-semibold">Order Items</h3>
+              <button type="button" onclick="addOrderItem()" class="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+                + Add Item
+              </button>
+            </div>
+            <div id="orderItemsList" class="space-y-2 max-h-40 overflow-y-auto">
+              <!-- Items will be added here dynamically -->
+            </div>
+            <div id="noItemsMessage" class="text-center text-gray-500 py-4 text-sm">
+              No items added yet. Click "Add Item" to start.
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <button onclick="closeOrderModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</button>
+          <button onclick="saveOrder()" class="px-4 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUPPLIER MODAL -->
+    <div id="supplierModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[460px] rounded-lg shadow-lg">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-yellow-100 text-yellow-700">🚚</div>
+          <h2 id="supplierModalTitle" class="text-lg font-semibold">Add Supplier</h2>
+        </div>
+        <div class="px-6 pt-4 pb-2">
+          <label class="block text-sm text-gray-600 mb-1" for="supplierName">Supplier Name</label>
+          <input type="text" id="supplierName" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="e.g., 4ar">
+
+          <label class="block text-sm text-gray-600 mb-1" for="supplierContact">Contact (phone/email)</label>
+          <input type="text" id="supplierContact" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="nocontact">
+
+          <label class="block text-sm text-gray-600 mb-1" for="supplierItems">Items Supplied (comma-separated)</label>
+          <input type="text" id="supplierItems" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-yellow-500" placeholder="e.g., 1 Peso Candy, 10 Peso Toys">
+
+          <label class="block text-sm text-gray-600 mb-1" for="supplierLastDelivery">Last Delivery Date</label>
+          <input type="date" id="supplierLastDelivery" class="border rounded w-full px-3 py-2 mb-2 focus:outline-none focus:ring-2 focus:ring-yellow-500">
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <button onclick="closeSupplierModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</button>
+          <button onclick="saveSupplier()" class="px-4 py-2 rounded bg-yellow-600 hover:bg-yellow-700 text-white">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESTOCK MODAL -->
+    <div id="restockModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[460px] rounded-lg shadow-lg">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-indigo-100 text-indigo-700">📥</div>
+          <h2 class="text-lg font-semibold">Receive Stock</h2>
+        </div>
+        <div class="px-6 pt-4 pb-2">
+          <p id="restockProductName" class="mb-3 font-medium text-gray-800"></p>
+
+          <label class="block text-sm text-gray-600 mb-1" for="restockSupplier">Supplier</label>
+          <select id="restockSupplier" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" title="Supplier"></select>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="restockQty">Quantity</label>
+              <input type="number" id="restockQty" placeholder="0" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+              <label class="block text-sm text-gray-600 mb-1" for="restockDate">Date</label>
+              <input type="date" id="restockDate" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" title="Restock date">
+            </div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <button onclick="closeRestockModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</button>
+          <button onclick="confirmRestock()" class="px-4 py-2 rounded bg-indigo-600 hover:bg-indigo-700 text-white">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOW STOCK MODAL -->
+    <div id="lowStockModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[480px] rounded-lg shadow-lg">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-amber-100 text-amber-700">⚠️</div>
+          <h2 class="text-lg font-semibold">Low Stock Alerts</h2>
+        </div>
+        <div class="px-6 pt-4 pb-2">
+          <ul id="lowStockModalList" class="text-gray-700 text-sm max-h-80 overflow-y-auto pr-2 space-y-1"></ul>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <button onclick="toggleLowStockModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- RECEIPT MODAL -->
+    <div id="receiptModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[520px] rounded-lg shadow-lg" id="receiptContent">
+        <div class="px-6 py-4 border-b rc-header">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-gray-100 text-gray-700">🧾</div>
+          <div>
+            <div class="rc-brand">Sales Receipt</div>
+            <div class="rc-meta" id="receiptDateMeta"></div>
+          </div>
+        </div>
+        <div class="px-6 pt-4 pb-2 text-sm text-gray-800">
+          <div class="grid grid-cols-2 gap-x-6 gap-y-1">
+            <div><span class="text-gray-500">Order ID:</span> <span id="receiptId" class="font-medium"></span></div>
+            <div><span class="text-gray-500">Status:</span> <span id="receiptStatus" class="font-medium"></span></div>
+            <div class="col-span-2"><span class="text-gray-500">Customer:</span> <span id="receiptCustomer" class="font-medium"></span></div>
+            <div><span class="text-gray-500">Payment:</span> <span id="receiptPayment" class="font-medium"></span></div>
+            <div><span class="text-gray-500">Ref:</span> <span id="receiptRef" class="font-medium"></span></div>
+          </div>
+          <div class="rc-section">
+            <h3 class="font-semibold mb-2">Items Ordered</h3>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-gray-700">
+                <thead>
+                  <tr>
+                    <th class="px-3 py-2">Product</th>
+                    <th class="px-3 py-2 num">Qty</th>
+                    <th class="px-3 py-2 num">Price</th>
+                    <th class="px-3 py-2 num">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="receiptItems"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="rc-section">
+            <table>
+              <tbody>
+                <tr><td>Total:</td><td class="num">₱<span id="receiptTotal"></span></td></tr>
+                <tr><td>Discount:</td><td class="num">₱<span id="receiptDiscount"></span></td></tr>
+                <tr class="rc-total-row"><td>Net Total:</td><td class="num">₱<span id="receiptNetTotal"></span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg no-print">
+          <button onclick="closeReceipt()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Close</button>
+          <button onclick="printReceipt()" class="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white">Print</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ORDER REVIEW MODAL -->
+    <div id="orderReviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+      <div class="bg-white w-[480px] rounded-lg shadow-lg">
+        <div class="px-6 py-4 border-b flex items-center gap-3">
+          <div class="w-9 h-9 flex items-center justify-center rounded-full bg-blue-100 text-blue-700">📝</div>
+          <h2 class="text-lg font-semibold">Review Order</h2>
+        </div>
+        <div class="px-6 pt-4 pb-2 text-sm text-gray-800">
+          <div class="grid grid-cols-2 gap-x-6 gap-y-2">
+            <div><span class="text-gray-500">Order:</span> <span id="reviewOrderId" class="font-medium"></span></div>
+            <div><span class="text-gray-500">Status:</span> <span id="reviewStatus" class="font-medium"></span></div>
+            <div class="col-span-2"><span class="text-gray-500">Customer:</span> <span id="reviewCustomer" class="font-medium"></span></div>
+            <div><span class="text-gray-500">Payment:</span> <span id="reviewPayment" class="font-medium"></span></div>
+            <div><span class="text-gray-500">Ref:</span> <span id="reviewRef" class="font-medium"></span></div>
+          </div>
+          <hr class="my-3">
+          <div class="mb-3">
+            <h3 class="font-semibold mb-2">Items Ordered</h3>
+            <div class="overflow-x-auto">
+              <table class="min-w-full text-sm text-gray-700">
+                <thead>
+                  <tr class="bg-gray-100">
+                    <th class="px-3 py-2 text-left">Product</th>
+                    <th class="px-3 py-2 text-right">Qty</th>
+                    <th class="px-3 py-2 text-right">Price</th>
+                    <th class="px-3 py-2 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody id="reviewItems"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="space-y-1">
+            <div class="flex justify-between"><span class="text-gray-600">Total:</span> <span class="font-semibold">₱<span id="reviewTotal"></span></span></div>
+            <div class="flex justify-between"><span class="text-gray-600">Discount:</span> <span class="font-semibold">₱<span id="reviewDiscount"></span></span></div>
+            <div class="flex justify-between text-lg"><span class="text-gray-800">Net Total:</span> <span class="font-bold">₱<span id="reviewNetTotal"></span></span></div>
+          </div>
+        </div>
+        <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
+          <button onclick="closeOrderReviewModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Close</button>
+          <button onclick="declineOrderFromModal()" class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white">Decline</button>
+          <button onclick="approveOrderFromModal()" class="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white">Approve</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="../assets/js/Config/config.js"></script>
+    <script src="../assets/js/Dashboard/script.js"></script>
+  </main>
+</div>
+</body>
+</html>
