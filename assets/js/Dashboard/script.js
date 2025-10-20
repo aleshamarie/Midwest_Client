@@ -2301,13 +2301,21 @@ async function aggregateTodaySales() {
     const result = await response.json();
     console.log('Aggregation result:', result);
     
-    // Show success message
+    // Show success message with debug info
+    let message = `Processed ${result.processedOrders} orders for ${result.date}`;
+    if (result.totalOrdersInDB !== undefined) {
+      message += `\n\nTotal orders in database: ${result.totalOrdersInDB}`;
+    }
+    if (result.debugInfo) {
+      message += `\n\nSearch range: ${result.debugInfo.searchRange.from} to ${result.debugInfo.searchRange.to}`;
+    }
+    
     Swal.fire({
       icon: 'success',
       title: 'Sales Data Updated!',
-      text: `Processed ${result.processedOrders} orders for ${result.date}`,
-      showConfirmButton: false,
-      timer: 2000
+      text: message,
+      showConfirmButton: true,
+      confirmButtonText: 'OK'
     });
     
     // Refresh the sales overview chart
