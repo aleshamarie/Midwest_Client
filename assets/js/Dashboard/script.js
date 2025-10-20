@@ -52,6 +52,36 @@ let inventoryDT = null;
 let ordersDT = null;
 let suppliersDT = null;
 
+// Load product images in the inventory table
+async function loadProductImagesInTable() {
+  console.log('Loading product images in table...');
+  
+  // Get all product image elements in the table
+  const imageElements = document.querySelectorAll('[id^="product-image-"]');
+  
+  for (const imgElement of imageElements) {
+    const productId = imgElement.id.replace('product-image-', '');
+    
+    try {
+      // Fetch the image for this product
+      const imageData = await fetchProductImage(productId);
+      
+      if (imageData && imageData.dataUrl) {
+        // Update the image source
+        imgElement.src = imageData.dataUrl;
+        imgElement.style.opacity = '1';
+        console.log(`Image loaded for product ${productId}`);
+      } else {
+        // Keep default image if no image found
+        console.log(`No image found for product ${productId}`);
+      }
+    } catch (error) {
+      console.error(`Error loading image for product ${productId}:`, error);
+      // Keep default image on error
+    }
+  }
+}
+
 // Enhanced lazy loading for images with better performance and UX
 function lazyLoadImages() {
   const lazyImages = document.querySelectorAll('.lazy-image:not(.loading):not(.loaded)');
@@ -231,17 +261,20 @@ function renderInventory() {
           orderable: false,
           data: null,
           render: function(data, type, row) {
-            const baseUrl = window.APP_CONFIG.API_BASE_URL;
-            const imageUrl = row.image_url ? `${baseUrl}${row.image_url}` : '../assets/images/Midwest.jpg';
-            const placeholderUrl = row.placeholder_url ? `${baseUrl}${row.placeholder_url}` : '../assets/images/Midwest.jpg';
             const productName = row.name || 'Product';
+            const productId = row.id;
             
-            return `<img src="${placeholderUrl}" 
-                         data-src="${imageUrl}" 
-                         class="lazy-image w-12 h-12 object-cover rounded" 
-                         alt="${productName}"
-                         loading="lazy"
-                         onerror="this.src='../assets/images/Midwest.jpg'">`;
+            // Create a unique ID for this image element
+            const imageId = `product-image-${productId}`;
+            
+            // Return an image element that will be populated by fetchProductImage
+            return `<div class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded">
+                      <img id="${imageId}" 
+                           src="../assets/images/Midwest.jpg" 
+                           class="w-12 h-12 object-cover rounded" 
+                           alt="${productName}"
+                           onerror="this.src='../assets/images/Midwest.jpg'">
+                    </div>`;
           }
         },
         { 
@@ -287,10 +320,9 @@ function renderInventory() {
         }
       ],
       drawCallback: function() {
-        // Lazy load images when table is drawn
+        // Load product images when table is drawn
         setTimeout(() => {
-          lazyLoadImages();
-          preloadCriticalImages();
+          loadProductImagesInTable();
         }, 100);
       },
       serverSide: false,
@@ -456,6 +488,11 @@ async function deleteProductFromTable(productId) {
     // Refresh the table
     inventoryDT.ajax.reload();
     Swal.fire({ icon: 'success', title: 'Product deleted successfully', text: `Deleted: ${result.deletedProduct?.name || 'Product'}` });
+    
+    // Reload images after table refresh
+    setTimeout(() => {
+      loadProductImagesInTable();
+    }, 500);
   } catch (error) {
     console.error('Failed to delete product:', error);
     Swal.fire({ icon: 'error', title: 'Failed to delete product', text: String(error.message || '') });
@@ -549,6 +586,11 @@ async function deleteProductImageFromTable(productId) {
     // Refresh the table
     inventoryDT.ajax.reload();
     Swal.fire({ icon: 'success', title: 'Image removed', text: `Deleted file: ${result.deletedFile || 'unknown'}` });
+    
+    // Reload images after table refresh
+    setTimeout(() => {
+      loadProductImagesInTable();
+    }, 500);
   } catch (error) {
     console.error('Image deletion failed:', error);
     Swal.fire({ icon: 'error', title: 'Failed to remove image', text: String(error.message || '') });
@@ -630,6 +672,11 @@ async function saveProduct() {
       // Refresh the table
       inventoryDT.ajax.reload();
       Swal.fire({ icon: 'success', title: 'Product updated successfully' });
+      
+      // Reload images after table refresh
+      setTimeout(() => {
+        loadProductImagesInTable();
+      }, 500);
     } catch (error) {
       console.error('Product update failed:', error);
       Swal.fire({ icon: 'error', title: 'Failed to update product' });
