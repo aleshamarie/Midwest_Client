@@ -2336,6 +2336,67 @@ async function checkDatabaseOrders() {
   }
 }
 
+async function aggregateAllHistoricalSales() {
+  try {
+    console.log('Aggregating all historical sales data...');
+    
+    // Show loading message
+    Swal.fire({
+      title: 'Processing Historical Sales...',
+      text: 'This may take a moment while we process all your orders',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/aggregate-sales`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to aggregate historical sales data');
+    }
+    
+    const result = await response.json();
+    console.log('Historical aggregation result:', result);
+    
+    // Show success message
+    let message = `Successfully processed ${result.processedDays} days of sales data!\n\n`;
+    if (result.results && result.results.length > 0) {
+      message += `Recent days processed:\n`;
+      result.results.slice(-5).forEach(day => {
+        message += `• ${day.date}: ${day.orders} orders - $${day.net_sales.toFixed(2)} net sales\n`;
+      });
+    }
+    
+    Swal.fire({
+      icon: 'success',
+      title: 'Historical Sales Aggregated!',
+      text: message,
+      showConfirmButton: true,
+      confirmButtonText: 'OK'
+    });
+    
+    // Refresh the sales overview chart
+    await loadSalesOverview();
+    
+  } catch (error) {
+    console.error('Error aggregating historical sales:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Failed to Aggregate Historical Sales',
+      text: error.message || 'An error occurred while processing historical sales data',
+      confirmButtonText: 'OK'
+    });
+  }
+}
+
 async function aggregateTodaySales() {
   try {
     console.log('Aggregating today\'s sales data...');
