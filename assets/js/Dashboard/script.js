@@ -2315,7 +2315,7 @@ async function checkDatabaseOrders() {
           year: 'numeric'
         });
         const status = order.status === 'Completed' ? '✅' : order.status === 'Pending' ? '⏳' : '📋';
-        message += `• ${date} - $${order.net_total} ${status}\n`;
+        message += `• ${date} - ₱${order.net_total} ${status}\n`;
       });
     } else {
       message += `No recent orders found.`;
@@ -2380,7 +2380,7 @@ async function aggregateAllHistoricalSales() {
           month: 'short',
           day: 'numeric'
         });
-        message += `• ${date}: ${day.orders} orders - $${day.net_sales.toFixed(2)}\n`;
+        message += `• ${date}: ${day.orders} orders - ₱${day.net_sales.toFixed(2)}\n`;
       });
     }
     
@@ -2428,8 +2428,8 @@ async function aggregateTodaySales() {
     // Show user-friendly success message
     let message = `Successfully updated today's sales data!\n\n`;
     message += `Processed ${result.processedOrders} orders\n`;
-    message += `Total sales: $${result.grossSales || 0}\n`;
-    message += `Net sales: $${result.netSales || 0}`;
+    message += `Total sales: ₱${result.grossSales || 0}\n`;
+    message += `Net sales: ₱${result.netSales || 0}`;
     
     Swal.fire({
       icon: 'success',
