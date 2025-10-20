@@ -412,11 +412,15 @@ async function editProductFromTable(productId) {
     // Store the product ID for saving
     document.getElementById('productModal').setAttribute('data-product-id', productId);
     
-    // Load existing image if available
-    if (product.image_url) {
-      showProductImagePreview(product.image_url);
-    } else {
-      resetProductImage();
+    // Fetch and display the existing image from MongoDB
+    await displayProductImage(productId, 'productImagePreviewImg');
+    
+    // Show the image preview section
+    const preview = document.getElementById('productImagePreview');
+    const upload = document.getElementById('productImageUpload');
+    if (preview && upload) {
+      preview.classList.remove('hidden');
+      upload.classList.add('hidden');
     }
     
     document.getElementById('productModal').classList.remove('hidden');
@@ -601,6 +605,63 @@ async function saveProduct() {
   
   closeProductModal();
   updateDashboard();
+}
+
+// Fetch existing image from MongoDB for a product
+async function fetchProductImage(productId) {
+  try {
+    console.log('Fetching image for product:', productId);
+    
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      }
+    });
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('No image found for product:', productId);
+        return null;
+      }
+      throw new Error(`Failed to fetch image: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    console.log('Image fetched successfully:', result);
+    
+    return result;
+  } catch (error) {
+    console.error('Error fetching product image:', error);
+    return null;
+  }
+}
+
+// Display fetched image in the UI
+async function displayProductImage(productId, targetElementId) {
+  try {
+    const imageData = await fetchProductImage(productId);
+    
+    if (imageData && imageData.dataUrl) {
+      // Update the target element with the fetched image
+      const targetElement = document.getElementById(targetElementId);
+      if (targetElement) {
+        targetElement.src = imageData.dataUrl;
+        targetElement.style.display = 'block';
+        console.log('Image displayed successfully');
+      }
+    } else {
+      console.log('No image available for this product');
+      // Show default image or placeholder
+      const targetElement = document.getElementById(targetElementId);
+      if (targetElement) {
+        targetElement.src = '../assets/images/Midwest.jpg';
+        targetElement.style.display = 'block';
+      }
+    }
+  } catch (error) {
+    console.error('Error displaying product image:', error);
+  }
 }
 
 async function uploadProductImage(productId, imageFile) {
