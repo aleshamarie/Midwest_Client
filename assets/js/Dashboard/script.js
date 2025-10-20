@@ -658,7 +658,26 @@ async function fetchProductImage(productId) {
   try {
     console.log('Fetching image for product:', productId);
     
-    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
+    // Try base64 endpoint first (if server supports GET)
+    try {
+      const base64Response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        }
+      });
+      
+      if (base64Response.ok) {
+        const result = await base64Response.json();
+        console.log('Image fetched via base64 endpoint:', result);
+        return result;
+      }
+    } catch (base64Error) {
+      console.log('Base64 endpoint not available, trying regular image endpoint');
+    }
+    
+    // Fallback to regular image endpoint
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -673,10 +692,21 @@ async function fetchProductImage(productId) {
       throw new Error(`Failed to fetch image: ${response.status}`);
     }
     
-    const result = await response.json();
-    console.log('Image fetched successfully:', result);
+    // For binary image data, we need to convert it to base64
+    const imageBlob = await response.blob();
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(imageBlob);
+    });
     
-    return result;
+    console.log('Image fetched successfully via regular endpoint');
+    
+    return {
+      dataUrl: base64Data,
+      mimeType: imageBlob.type
+    };
   } catch (error) {
     console.error('Error fetching product image:', error);
     return null;
