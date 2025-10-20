@@ -2301,17 +2301,21 @@ async function checkDatabaseOrders() {
     const result = await response.json();
     console.log('Database orders result:', result);
     
-    // Show database information
-    let message = `Database Information:\n\n`;
-    message += `Total orders in database: ${result.totalOrdersInDB}\n`;
-    message += `Today's orders: ${result.todayOrders}\n`;
-    message += `Search range: ${result.searchRange.from} to ${result.searchRange.to}\n\n`;
+    // Show user-friendly database information
+    let message = `📊 Database Summary:\n\n`;
+    message += `📦 Total orders: ${result.totalOrdersInDB}\n`;
+    message += `📅 Today's orders: ${result.todayOrders}\n\n`;
     
     if (result.recentOrders && result.recentOrders.length > 0) {
-      message += `Recent orders:\n`;
+      message += `🕒 Recent Activity:\n`;
       result.recentOrders.slice(0, 5).forEach(order => {
-        const date = new Date(order.createdAt).toLocaleDateString();
-        message += `• ${order.order_code || order.id}: ${date} - $${order.net_total} (${order.status})\n`;
+        const date = new Date(order.createdAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric'
+        });
+        const status = order.status === 'Completed' ? '✅' : order.status === 'Pending' ? '⏳' : '📋';
+        message += `• ${date} - $${order.net_total} ${status}\n`;
       });
     } else {
       message += `No recent orders found.`;
@@ -2366,18 +2370,23 @@ async function aggregateAllHistoricalSales() {
     const result = await response.json();
     console.log('Historical aggregation result:', result);
     
-    // Show success message
-    let message = `Successfully processed ${result.processedDays} days of sales data!\n\n`;
+    // Show user-friendly success message
+    let message = `🎉 Successfully processed ${result.processedDays} days of sales data!\n\n`;
     if (result.results && result.results.length > 0) {
-      message += `Recent days processed:\n`;
+      message += `📈 Recent Sales Activity:\n`;
       result.results.slice(-5).forEach(day => {
-        message += `• ${day.date}: ${day.orders} orders - $${day.net_sales.toFixed(2)} net sales\n`;
+        const date = new Date(day.date).toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        });
+        message += `• ${date}: ${day.orders} orders - $${day.net_sales.toFixed(2)}\n`;
       });
     }
     
     Swal.fire({
       icon: 'success',
-      title: 'Historical Sales Aggregated!',
+      title: '📊 All Sales Updated!',
       text: message,
       showConfirmButton: true,
       confirmButtonText: 'OK'
@@ -2416,18 +2425,15 @@ async function aggregateTodaySales() {
     const result = await response.json();
     console.log('Aggregation result:', result);
     
-    // Show success message with debug info
-    let message = `Processed ${result.processedOrders} orders for ${result.date}`;
-    if (result.totalOrdersInDB !== undefined) {
-      message += `\n\nTotal orders in database: ${result.totalOrdersInDB}`;
-    }
-    if (result.debugInfo) {
-      message += `\n\nSearch range: ${result.debugInfo.searchRange.from} to ${result.debugInfo.searchRange.to}`;
-    }
+    // Show user-friendly success message
+    let message = `Successfully updated today's sales data!\n\n`;
+    message += `Processed ${result.processedOrders} orders\n`;
+    message += `Total sales: $${result.grossSales || 0}\n`;
+    message += `Net sales: $${result.netSales || 0}`;
     
     Swal.fire({
       icon: 'success',
-      title: 'Sales Data Updated!',
+      title: 'Today\'s Sales Updated!',
       text: message,
       showConfirmButton: true,
       confirmButtonText: 'OK'
