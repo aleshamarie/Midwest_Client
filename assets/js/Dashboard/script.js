@@ -604,36 +604,83 @@ async function saveProduct() {
 }
 
 async function uploadProductImage(productId, imageFile) {
-  // Compress image before converting to base64
-  const compressedImageData = await compressImage(imageFile, 0.8, 800); // 80% quality, max 800px width
-  
-  const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-    },
-    body: JSON.stringify({
-      productId,
-      imageData: compressedImageData
-    })
-  });
-  
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || 'Image upload failed');
+  try {
+    console.log('Uploading image for product:', productId);
+    console.log('Original file size:', Math.round(imageFile.size / 1024), 'KB');
+    
+    // Try base64 upload first (with compression)
+    try {
+      const compressedImageData = await compressImage(imageFile, 0.8, 800); // 80% quality, max 800px width
+      console.log('Compressed image size:', Math.round(compressedImageData.length / 1024), 'KB');
+      
+      // Use FormData instead of JSON to avoid URL length issues
+      const formData = new FormData();
+      formData.append('productId', productId);
+      formData.append('imageData', compressedImageData);
+      
+      const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+          // Don't set Content-Type for FormData, let browser set it with boundary
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Base64 upload failed:', response.status, errorText);
+        throw new Error(`Base64 upload failed: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('Base64 upload successful:', result);
+      
+      // Update local product with new image URL
+      const productIndex = products.findIndex(p => p.id === productId);
+      if (productIndex !== -1) {
+        products[productIndex].image_url = result.product.image_url;
+        localStorage.setItem('products', JSON.stringify(products));
+      }
+      
+      return result;
+    } catch (base64Error) {
+      console.warn('Base64 upload failed, trying regular file upload:', base64Error.message);
+      
+      // Fallback to regular file upload
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      
+      const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('File upload failed:', response.status, errorText);
+        throw new Error(`File upload failed: ${response.status} - ${errorText}`);
+      }
+      
+      const result = await response.json();
+      console.log('File upload successful:', result);
+      
+      // Update local product with new image URL
+      const productIndex = products.findIndex(p => p.id === productId);
+      if (productIndex !== -1) {
+        products[productIndex].image_url = result.product.image_url;
+        localStorage.setItem('products', JSON.stringify(products));
+      }
+      
+      return result;
+    }
+  } catch (error) {
+    console.error('Image upload error:', error);
+    throw error;
   }
-  
-  const result = await response.json();
-  
-  // Update local product with new image URL
-  const productIndex = products.findIndex(p => p.id === productId);
-  if (productIndex !== -1) {
-    products[productIndex].image_url = result.product.image_url;
-    localStorage.setItem('products', JSON.stringify(products));
-  }
-  
-  return result;
 }
 
 // Image compression function
