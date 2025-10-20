@@ -281,6 +281,7 @@ function renderInventory() {
             return `<button onclick="editProductFromTable('${row.id}')" class="text-blue-600">Edit</button>
                     <button onclick="deleteProductFromTable('${row.id}')" class="text-red-600 ml-2">Delete</button>
                     <button onclick="openRestockModalFromTable('${row.id}')" class="text-indigo-600 ml-2">Restock</button>
+                    <button onclick="fetchProductImageFromTable('${row.id}')" class="text-green-600 ml-2">Fetch Image</button>
                     ${row.image_url ? `<button onclick="deleteProductImageFromTable('${row.id}')" class="text-orange-600 ml-2">Remove Image</button>` : ''}`;
           }
         }
@@ -479,6 +480,51 @@ async function openRestockModalFromTable(productId) {
   }
 }
 
+async function fetchProductImageFromTable(productId) {
+  console.log('fetchProductImageFromTable called with productId:', productId);
+  
+  try {
+    Swal.fire({
+      title: 'Fetching Image...',
+      text: 'Please wait while we fetch the image from the database',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    const imageData = await fetchProductImage(productId);
+    
+    if (imageData && imageData.dataUrl) {
+      // Show the fetched image in a modal
+      Swal.close();
+      Swal.fire({
+        title: 'Product Image',
+        html: `<img src="${imageData.dataUrl}" alt="Product Image" style="max-width: 100%; max-height: 400px; object-fit: contain;">`,
+        showConfirmButton: true,
+        confirmButtonText: 'Close',
+        width: 'auto'
+      });
+    } else {
+      Swal.close();
+      Swal.fire({ 
+        icon: 'info', 
+        title: 'No Image Found', 
+        text: 'This product does not have an image in the database' 
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching product image:', error);
+    Swal.close();
+    Swal.fire({ 
+      icon: 'error', 
+      title: 'Failed to Fetch Image', 
+      text: 'Could not load image from database' 
+    });
+  }
+}
+
 async function deleteProductImageFromTable(productId) {
   console.log('deleteProductImageFromTable called with productId:', productId);
   const { isConfirmed } = await Swal.fire({ icon: 'warning', title: 'Remove product image?', text: 'This will permanently delete the image file from the server.', showCancelButton: true, confirmButtonText: 'Remove' });
@@ -661,6 +707,57 @@ async function displayProductImage(productId, targetElementId) {
     }
   } catch (error) {
     console.error('Error displaying product image:', error);
+  }
+}
+
+// Fetch image for the currently selected product in the modal
+async function fetchCurrentProductImage() {
+  const productId = document.getElementById('productModal').getAttribute('data-product-id');
+  
+  if (!productId) {
+    Swal.fire({ 
+      icon: 'warning', 
+      title: 'No Product Selected', 
+      text: 'Please select a product first' 
+    });
+    return;
+  }
+  
+  try {
+    Swal.fire({
+      title: 'Fetching Image...',
+      text: 'Please wait while we fetch the image from the database',
+      allowOutsideClick: false,
+      showConfirmButton: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+    
+    await displayProductImage(productId, 'productImagePreviewImg');
+    
+    // Show the image preview section
+    const preview = document.getElementById('productImagePreview');
+    const upload = document.getElementById('productImageUpload');
+    if (preview && upload) {
+      preview.classList.remove('hidden');
+      upload.classList.add('hidden');
+    }
+    
+    Swal.close();
+    Swal.fire({ 
+      icon: 'success', 
+      title: 'Image Fetched', 
+      text: 'Image has been loaded from the database' 
+    });
+  } catch (error) {
+    console.error('Error fetching current product image:', error);
+    Swal.close();
+    Swal.fire({ 
+      icon: 'error', 
+      title: 'Failed to Fetch Image', 
+      text: 'Could not load image from database' 
+    });
   }
 }
 

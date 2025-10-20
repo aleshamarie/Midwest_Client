@@ -321,7 +321,10 @@
             <div id="productImageContainer" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
               <div id="productImagePreview" class="mb-2">
                 <img id="productImagePreviewImg" src="../assets/images/Midwest.jpg" alt="Product preview" class="mx-auto max-h-32 max-w-32 object-contain rounded">
-                <button type="button" onclick="removeProductImage()" class="mt-2 text-red-600 text-sm hover:text-red-800">Remove Image</button>
+                <div class="mt-2 space-x-2">
+                  <button type="button" onclick="fetchCurrentProductImage()" class="text-blue-600 text-sm hover:text-blue-800">Fetch Image</button>
+                  <button type="button" onclick="removeProductImage()" class="text-red-600 text-sm hover:text-red-800">Remove Image</button>
+                </div>
               </div>
               <div id="productImageUpload" class="cursor-pointer hidden">
                 <div class="text-gray-400 mb-2">📷</div>
