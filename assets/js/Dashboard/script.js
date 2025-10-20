@@ -254,29 +254,8 @@ function renderInventory() {
       searching: true,
       info: true,
       dom: 'ltip',
-      order: [[1, 'asc']], // Sort by Product name
+      order: [[0, 'asc']], // Sort by Product name
       columns: [
-        { 
-          title: 'Image', 
-          orderable: false,
-          data: null,
-          render: function(data, type, row) {
-            const productName = row.name || 'Product';
-            const productId = row.id;
-            
-            // Create a unique ID for this image element
-            const imageId = `product-image-${productId}`;
-            
-            // Return an image element that will be populated by fetchProductImage
-            return `<div class="w-12 h-12 flex items-center justify-center bg-gray-100 rounded">
-                      <img id="${imageId}" 
-                           src="../assets/images/Midwest.jpg" 
-                           class="w-12 h-12 object-cover rounded" 
-                           alt="${productName}"
-                           onerror="this.src='../assets/images/Midwest.jpg'">
-                    </div>`;
-          }
-        },
         { 
           title: 'Product',
           data: 'name'
@@ -320,10 +299,7 @@ function renderInventory() {
         }
       ],
       drawCallback: function() {
-        // Load product images when table is drawn
-        setTimeout(() => {
-          loadProductImagesInTable();
-        }, 100);
+        // Table drawn - no special processing needed
       },
       serverSide: false,
       processing: false,
@@ -488,11 +464,6 @@ async function deleteProductFromTable(productId) {
     // Refresh the table
     inventoryDT.ajax.reload();
     Swal.fire({ icon: 'success', title: 'Product deleted successfully', text: `Deleted: ${result.deletedProduct?.name || 'Product'}` });
-    
-    // Reload images after table refresh
-    setTimeout(() => {
-      loadProductImagesInTable();
-    }, 500);
   } catch (error) {
     console.error('Failed to delete product:', error);
     Swal.fire({ icon: 'error', title: 'Failed to delete product', text: String(error.message || '') });
@@ -586,11 +557,6 @@ async function deleteProductImageFromTable(productId) {
     // Refresh the table
     inventoryDT.ajax.reload();
     Swal.fire({ icon: 'success', title: 'Image removed', text: `Deleted file: ${result.deletedFile || 'unknown'}` });
-    
-    // Reload images after table refresh
-    setTimeout(() => {
-      loadProductImagesInTable();
-    }, 500);
   } catch (error) {
     console.error('Image deletion failed:', error);
     Swal.fire({ icon: 'error', title: 'Failed to remove image', text: String(error.message || '') });
@@ -672,11 +638,6 @@ async function saveProduct() {
       // Refresh the table
       inventoryDT.ajax.reload();
       Swal.fire({ icon: 'success', title: 'Product updated successfully' });
-      
-      // Reload images after table refresh
-      setTimeout(() => {
-        loadProductImagesInTable();
-      }, 500);
     } catch (error) {
       console.error('Product update failed:', error);
       Swal.fire({ icon: 'error', title: 'Failed to update product' });
