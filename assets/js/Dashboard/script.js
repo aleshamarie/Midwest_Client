@@ -2282,6 +2282,60 @@ const salesChart = new Chart(ctx, {
   options: { responsive: true, plugins: { legend: { position: 'top' } } }
 });
 
+async function checkDatabaseOrders() {
+  try {
+    console.log('Checking database orders...');
+    
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/sync-orders`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to check database orders');
+    }
+    
+    const result = await response.json();
+    console.log('Database orders result:', result);
+    
+    // Show database information
+    let message = `Database Information:\n\n`;
+    message += `Total orders in database: ${result.totalOrdersInDB}\n`;
+    message += `Today's orders: ${result.todayOrders}\n`;
+    message += `Search range: ${result.searchRange.from} to ${result.searchRange.to}\n\n`;
+    
+    if (result.recentOrders && result.recentOrders.length > 0) {
+      message += `Recent orders:\n`;
+      result.recentOrders.slice(0, 5).forEach(order => {
+        const date = new Date(order.createdAt).toLocaleDateString();
+        message += `• ${order.order_code || order.id}: ${date} - $${order.net_total} (${order.status})\n`;
+      });
+    } else {
+      message += `No recent orders found.`;
+    }
+    
+    Swal.fire({
+      icon: 'info',
+      title: 'Database Orders Check',
+      text: message,
+      showConfirmButton: true,
+      confirmButtonText: 'OK'
+    });
+    
+  } catch (error) {
+    console.error('Error checking database orders:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Failed to Check Database',
+      text: error.message || 'An error occurred while checking database orders',
+      confirmButtonText: 'OK'
+    });
+  }
+}
+
 async function aggregateTodaySales() {
   try {
     console.log('Aggregating today\'s sales data...');
