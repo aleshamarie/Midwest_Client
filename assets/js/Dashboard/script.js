@@ -2282,6 +2282,48 @@ const salesChart = new Chart(ctx, {
   options: { responsive: true, plugins: { legend: { position: 'top' } } }
 });
 
+async function aggregateTodaySales() {
+  try {
+    console.log('Aggregating today\'s sales data...');
+    
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/aggregate-today`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to aggregate sales data');
+    }
+    
+    const result = await response.json();
+    console.log('Aggregation result:', result);
+    
+    // Show success message
+    Swal.fire({
+      icon: 'success',
+      title: 'Sales Data Updated!',
+      text: `Processed ${result.processedOrders} orders for ${result.date}`,
+      showConfirmButton: false,
+      timer: 2000
+    });
+    
+    // Refresh the sales overview chart
+    await loadSalesOverview();
+    
+  } catch (error) {
+    console.error('Error aggregating sales:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Failed to Update Sales',
+      text: error.message || 'An error occurred while updating sales data',
+      confirmButtonText: 'OK'
+    });
+  }
+}
+
 async function loadSalesOverview() {
   try {
     // Try auth endpoint first; if unauthorized, fall back to public endpoint
