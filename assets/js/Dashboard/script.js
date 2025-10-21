@@ -645,15 +645,30 @@ async function saveProduct() {
   } else {
     // Adding new product
     try {
-      // For new products, we'll add to local storage first
-      // In a real app, you'd create the product via API first, then upload image
-      products.push({ name, category, description, price, stock });
-      localStorage.setItem('products', JSON.stringify(products));
+      // Create product via API
+      const res = await apiFetch('/products', { 
+        method: 'POST', 
+        body: JSON.stringify({ name, category, description, price, stock }) 
+      });
       
+      const newProduct = res.product;
+      
+      // Handle image upload if image selected
+      if (imageFile) {
+        try {
+          await uploadProductImage(newProduct.id, imageFile);
+        } catch (error) {
+          console.error('Image upload failed:', error);
+          Swal.fire({ icon: 'warning', title: 'Product saved', text: 'Image upload failed' });
+        }
+      }
+      
+      // Refresh the table
+      inventoryDT.ajax.reload();
       Swal.fire({ icon: 'success', title: 'Product added successfully' });
     } catch (error) {
       console.error('Product creation failed:', error);
-      Swal.fire({ icon: 'error', title: 'Failed to create product' });
+      Swal.fire({ icon: 'error', title: 'Failed to create product', text: error.message || 'Unknown error' });
     }
   }
   
