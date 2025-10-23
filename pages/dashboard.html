@@ -139,6 +139,57 @@
           <ul id="lowStockList" class="text-gray-700 max-h-80 overflow-y-auto"></ul>
         </div>
       </div>
+      
+      <!-- DAILY SALES (SUMMARY) -->
+      <div class="grid grid-cols-3 gap-4 mt-4">
+        <div class="bg-white p-4 rounded shadow col-span-1">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="font-semibold">Daily Sales (Summary)</h3>
+            <span id="dsDate" class="text-xs text-gray-500"></span>
+          </div>
+          <table class="w-full text-sm text-gray-700">
+            <tbody>
+              <tr><td class="py-1">Gross Sales</td><td class="py-1 text-right">₱<span id="dsGross">0.00</span></td></tr>
+              <tr><td class="py-1">Refunds</td><td class="py-1 text-right">₱<span id="dsRefunds">0.00</span></td></tr>
+              <tr><td class="py-1">Discounts</td><td class="py-1 text-right">₱<span id="dsDiscounts">0.00</span></td></tr>
+              <tr class="font-semibold"><td class="py-1">Net Sales</td><td class="py-1 text-right">₱<span id="dsNet">0.00</span></td></tr>
+              <tr><td class="py-1">Cost of Goods</td><td class="py-1 text-right">₱<span id="dsCogs">0.00</span></td></tr>
+              <tr><td class="py-1">Gross Profit</td><td class="py-1 text-right">₱<span id="dsProfit">0.00</span></td></tr>
+              <tr><td class="py-1">Margin</td><td class="py-1 text-right"><span id="dsMargin">0.00</span>%</td></tr>
+              <tr><td class="py-1">Taxes</td><td class="py-1 text-right">₱<span id="dsTaxes">0.00</span></td></tr>
+            </tbody>
+          </table>
+          <p id="dsEmpty" class="text-xs text-gray-500 mt-2 hidden">No summary for this date.</p>
+        </div>
+
+        <!-- ORDERS BY DATE (TABLE) -->
+        <div class="bg-white p-4 rounded shadow col-span-2">
+          <div class="flex justify-between items-center mb-3">
+            <h3 class="font-semibold">Orders (Selected Date)</h3>
+            <div class="text-xs text-gray-600 space-x-4">
+              <span>Total: <span id="obdTotalOrders">0</span></span>
+              <span>Gross: ₱<span id="obdGross">0.00</span></span>
+              <span>Discounts: ₱<span id="obdDiscounts">0.00</span></span>
+              <span>Net: ₱<span id="obdNet">0.00</span></span>
+            </div>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-gray-700">
+              <thead>
+                <tr class="bg-gray-100">
+                  <th class="px-3 py-2 text-left">Order ID</th>
+                  <th class="px-3 py-2 text-left">Customer</th>
+                  <th class="px-3 py-2 text-right">Net Total</th>
+                  <th class="px-3 py-2 text-left">Time</th>
+                  <th class="px-3 py-2 text-left">Status</th>
+                </tr>
+              </thead>
+              <tbody id="ordersByDateBody"></tbody>
+            </table>
+            <p id="ordersByDateEmpty" class="text-xs text-gray-500 mt-2 hidden">No orders for this date.</p>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- INVENTORY -->

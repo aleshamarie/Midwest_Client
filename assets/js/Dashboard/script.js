@@ -2763,6 +2763,71 @@ function onDateFilterChange(value) {
   }
   renderOrders();
   updateDashboard();
+  // Also load daily sales summary and orders-by-date table
+  loadDailySalesSummary();
+  loadOrdersByDateTable();
+}
+
+// --------------------------- DAILY SALES SUMMARY ---------------------------
+async function loadDailySalesSummary() {
+  try {
+    const token = localStorage.getItem('authToken');
+    const date = activeDateFilter || new Date().toISOString().slice(0, 10);
+    document.getElementById('dsDate').textContent = date;
+    const res = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/sales-by-date?date=${date}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    const has = (data.rows && data.rows.length);
+    document.getElementById('dsEmpty').classList.toggle('hidden', !!has);
+    const row = has ? data.rows[0] : null;
+    const fmt = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('dsGross').textContent = fmt(row?.gross_sales);
+    document.getElementById('dsRefunds').textContent = fmt(row?.refunds);
+    document.getElementById('dsDiscounts').textContent = fmt(row?.discounts);
+    document.getElementById('dsNet').textContent = fmt(row?.net_sales);
+    document.getElementById('dsCogs').textContent = fmt(row?.cost_of_goods);
+    document.getElementById('dsProfit').textContent = fmt(row?.gross_profit);
+    document.getElementById('dsMargin').textContent = (Number(row?.margin_percent || 0)).toFixed(2);
+    document.getElementById('dsTaxes').textContent = fmt(row?.taxes);
+  } catch (_e) {
+    // ignore
+  }
+}
+
+// --------------------------- ORDERS BY DATE TABLE ---------------------------
+async function loadOrdersByDateTable() {
+  try {
+    const token = localStorage.getItem('authToken');
+    const date = activeDateFilter || new Date().toISOString().slice(0, 10);
+    const res = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/orders-by-date?date=${date}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    document.getElementById('obdTotalOrders').textContent = Number(data.total_orders || 0).toLocaleString();
+    const fmt = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    document.getElementById('obdGross').textContent = fmt(data.gross_sales);
+    document.getElementById('obdDiscounts').textContent = fmt(data.discounts);
+    document.getElementById('obdNet').textContent = fmt(data.net_sales);
+
+    const body = document.getElementById('ordersByDateBody');
+    body.innerHTML = '';
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    document.getElementById('ordersByDateEmpty').classList.toggle('hidden', rows.length > 0);
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="px-3 py-2">${r.order_code || r.id}</td>
+        <td class="px-3 py-2">${r.customer || ''}</td>
+        <td class="px-3 py-2 text-right">₱${fmt(r.net_total)}</td>
+        <td class="px-3 py-2">${new Date(r.createdAt).toLocaleTimeString()}</td>
+        <td class="px-3 py-2">${(r.status || '').toString()}</td>
+      `;
+      body.appendChild(tr);
+    }
+  } catch (_e) {
+    // ignore
+  }
 }
 
 // Helper: fetch all products via lazy endpoint (auth->public)
