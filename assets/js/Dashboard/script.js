@@ -9,28 +9,6 @@
   }
 })();
 
-// Inject a Logout button in the top-right corner
-(function injectLogout() {
-  const btn = document.createElement('button');
-  btn.id = 'logoutBtn';
-  btn.textContent = 'Logout';
-  btn.style.position = 'fixed';
-  btn.style.top = '12px';
-  btn.style.right = '12px';
-  btn.style.zIndex = '1000';
-  btn.style.background = '#dc2626';
-  btn.style.color = '#fff';
-  btn.style.border = 'none';
-  btn.style.padding = '8px 12px';
-  btn.style.borderRadius = '6px';
-  btn.style.cursor = 'pointer';
-  btn.addEventListener('click', () => {
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('authUser');
-    window.location.href = '../index.html';
-  });
-  document.body.appendChild(btn);
-})();
 
 // The following is the provided dashboard logic (localStorage-backed)
 // You can later replace localStorage with backend API calls.
@@ -2839,6 +2817,16 @@ async function fetchAllProducts() {
   const rp = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/lazy/public`);
   if (rp.ok) { const j2 = await rp.json(); return j2.products || []; }
   return [];
+}
+
+// --------------------------- LOGOUT FUNCTION ---------------------------
+function logout() {
+  // Clear authentication token
+  localStorage.removeItem('authToken');
+  localStorage.removeItem('userName');
+  
+  // Redirect to login page
+  window.location.href = '../index.html';
 }
 
 
