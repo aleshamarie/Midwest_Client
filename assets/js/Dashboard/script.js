@@ -279,42 +279,24 @@ function renderInventory() {
       drawCallback: function() {
         // Table drawn - no special processing needed
       },
-      serverSide: false,
-      processing: false,
+      serverSide: true,
+      processing: true,
       ajax: {
-        url: `${window.APP_CONFIG.API_BASE_URL}/products/lazy`,
+        url: `${window.APP_CONFIG.API_BASE_URL}/products/datatables`,
         type: 'GET',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        },
-        data: function(d) {
-          const search = d.search?.value || '';
-          
-          console.log('DataTables Ajax request:', {
-            url: `${window.APP_CONFIG.API_BASE_URL}/products`,
-            search: search
-          });
-          
-          return {
-            search: search
-          };
         },
         error: function(xhr, error, thrown) {
           console.error('DataTables Ajax error:', {
             xhr: xhr,
             error: error,
             thrown: thrown,
-            url: `${window.APP_CONFIG.API_BASE_URL}/products`
+            url: `${window.APP_CONFIG.API_BASE_URL}/products/datatables`
           });
           
           // Show user-friendly error message
           Swal.fire({ icon: 'error', title: 'Unable to load products', text: 'Unable to load products.' });
-        },
-        dataSrc: function(json) {
-          console.log('DataTables response received:', json);
-          
-          // For client-side processing, return the products array directly
-          return json.products || [];
         }
       },
       drawCallback: function() {
@@ -1061,23 +1043,87 @@ function formatOrderDate(dateString) {
 function renderOrders() {
   if (!ordersDT) {
     ordersDT = $('#ordersTable').DataTable({
+      processing: true,
+      serverSide: true,
       paging: true,
       searching: true,
       info: true,
       dom: 'ltip',
-      order: [], // Disable default sorting - we'll pre-sort the data
+      order: [[8, 'desc']], // Sort by date descending by default
+      ajax: {
+        url: `${window.APP_CONFIG.API_BASE_URL}/orders/datatables`,
+        type: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        error: function(xhr, error, thrown) {
+          console.error('DataTables Ajax error:', {
+            xhr: xhr,
+            error: error,
+            thrown: thrown,
+            url: `${window.APP_CONFIG.API_BASE_URL}/orders/datatables`
+          });
+          
+          // Show user-friendly error message
+          Swal.fire({ icon: 'error', title: 'Unable to load orders', text: 'Unable to load orders.' });
+        }
+      },
       columns: [
-        { title: 'Order ID' },
-        { title: 'Customer' },
-        { title: 'Contact' },
-        { title: 'Address' },
-        { title: 'Total' },
-        { title: 'Discount' },
-        { title: 'Net Total' },
-        { title: 'Payment' },
-        { title: 'Date' },
-        { title: 'Status' },
-        { title: 'Actions', orderable: false }
+        { 
+          title: 'Order ID',
+          data: 'order_code'
+        },
+        { 
+          title: 'Customer',
+          data: 'name'
+        },
+        { 
+          title: 'Contact',
+          data: 'contact'
+        },
+        { 
+          title: 'Address',
+          data: 'address'
+        },
+        { 
+          title: 'Total',
+          data: 'totalPrice',
+          render: function(data) {
+            return `₱${Number(data || 0).toFixed(2)}`;
+          }
+        },
+        { 
+          title: 'Discount',
+          data: 'discount',
+          render: function(data) {
+            return `₱${Number(data || 0).toFixed(2)}`;
+          }
+        },
+        { 
+          title: 'Net Total',
+          data: 'net_total',
+          render: function(data) {
+            return `₱${Number(data || 0).toFixed(2)}`;
+          }
+        },
+        { 
+          title: 'Payment',
+          data: 'payment'
+        },
+        { 
+          title: 'Date',
+          data: 'createdAt'
+        },
+        { 
+          title: 'Status',
+          data: 'status',
+          orderable: false
+        },
+        { 
+          title: 'Actions', 
+          data: 'actions',
+          orderable: false
+        }
       ]
     });
     
@@ -1087,128 +1133,10 @@ function renderOrders() {
     const oWrapper = document.getElementById('ordersControlsLength');
     const oLengthNode = document.querySelector('#ordersTable_wrapper .dataTables_length');
     if (oWrapper && oLengthNode) oWrapper.appendChild(oLengthNode);
+  } else {
+    // DataTable already exists, just reload it
+    ordersDT.ajax.reload();
   }
-  ordersDT.clear();
-  // Apply date filter if present
-  const matchesDate = (iso) => {
-    if (!activeDateFilter) return true;
-    if (!iso) return false;
-    const d = new Date(iso);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${m}-${day}` === activeDateFilter;
-  };
-  const totalCount = orders.length;
-  const pendingCount = orders.filter(o => (o.status || 'Pending').toLowerCase() === 'pending').length;
-  const processingCount = orders.filter(o => (o.status || '').toLowerCase() === 'processing').length;
-  const completedCount = orders.filter(o => (o.status || '').toLowerCase() === 'completed').length;
-  const cancelledCount = orders.filter(o => (o.status || '').toLowerCase() === 'cancelled').length;
-  const totalEl = document.getElementById('ordersTotalCount');
-  const pendingEl = document.getElementById('ordersPendingCount');
-  const processingEl = document.getElementById('ordersProcessingCount');
-  const completedEl = document.getElementById('ordersCompletedCount');
-  const cancelledEl = document.getElementById('ordersCancelledCount');
-  const navTotalEl = document.getElementById('ordersNavTotal');
-  const navPendingEl = document.getElementById('ordersNavPending');
-  const navProcessingEl = document.getElementById('ordersNavProcessing');
-  const navCompletedEl = document.getElementById('ordersNavCompleted');
-  const navCancelledEl = document.getElementById('ordersNavCancelled');
-  if (totalEl) totalEl.textContent = totalCount;
-  if (pendingEl) pendingEl.textContent = pendingCount;
-  if (processingEl) processingEl.textContent = processingCount;
-  if (completedEl) completedEl.textContent = completedCount;
-  if (cancelledEl) cancelledEl.textContent = cancelledCount;
-  if (navTotalEl) navTotalEl.textContent = totalCount;
-  if (navPendingEl) navPendingEl.textContent = pendingCount;
-  if (navProcessingEl) navProcessingEl.textContent = processingCount;
-  if (navCompletedEl) navCompletedEl.textContent = completedCount;
-  if (navCancelledEl) navCancelledEl.textContent = cancelledCount;
-
-  // Prioritize orders: pending and processing first, then others
-  const filteredOrders = orders.filter(o => matchesDate(o.createdAt));
-  console.log('Total orders before prioritization:', filteredOrders.length);
-  console.log('Order statuses:', filteredOrders.map(o => o.status));
-  
-  const prioritizedOrders = filteredOrders.sort((a, b) => {
-    const statusA = (a.status || '').toLowerCase();
-    const statusB = (b.status || '').toLowerCase();
-    
-    // Priority order: pending > processing > completed > cancelled
-    const priorityOrder = { 'pending': 0, 'processing': 1, 'completed': 2, 'cancelled': 3 };
-    const priorityA = priorityOrder[statusA] !== undefined ? priorityOrder[statusA] : 4;
-    const priorityB = priorityOrder[statusB] !== undefined ? priorityOrder[statusB] : 4;
-    
-    if (priorityA !== priorityB) {
-      return priorityA - priorityB;
-    }
-    
-    // If same priority, sort by date (newest first)
-    const dateA = new Date(a.createdAt || 0);
-    const dateB = new Date(b.createdAt || 0);
-    return dateB - dateA;
-  });
-  
-
-  prioritizedOrders.forEach((o, i) => {
-    const paymentCell = `${o.payment}${o.payment === 'GCash' && o.ref ? `<div class="text-xs text-blue-600">Ref: ${o.ref}</div>` : ''}`;
-    const status = (o.status || '').toLowerCase();
-    const itemsHtml = Array.isArray(o.items) && o.items.length
-      ? `<div class="text-xs text-gray-600 mt-1">${o.items.map(it => `${it.name || ('#'+it.product_id)} × ${it.quantity}`).join(', ')}</div>`
-      : '';
-    let actionsHtml = '';
-    
-    // Add visual priority indicators
-    let statusClass = '';
-    let statusIcon = '';
-    if (status === 'pending') {
-      statusClass = 'bg-yellow-100 text-yellow-800 font-semibold';
-      statusIcon = '⏳';
-    } else if (status === 'processing') {
-      statusClass = 'bg-blue-100 text-blue-800 font-semibold';
-      statusIcon = '🔄';
-    } else if (status === 'completed') {
-      statusClass = 'bg-green-100 text-green-800';
-      statusIcon = '✅';
-    } else if (status === 'cancelled') {
-      statusClass = 'bg-red-100 text-red-800';
-      statusIcon = '❌';
-    }
-    
-    if (status === 'completed') {
-      actionsHtml = `<button onclick="showReceipt(orders[${i}])" class="text-green-600">Receipt</button>`;
-    } else if (status === 'processing') {
-      actionsHtml = `<button onclick="completeOrder(${i})" class="text-green-600">Complete</button>
-                     <button onclick="showReceipt(orders[${i}])" class="text-blue-600 ml-2">Receipt</button>`;
-    } else if (status === 'cancelled') {
-      // Cancelled orders - no checking required, just show receipt
-      actionsHtml = `<button onclick="showReceipt(orders[${i}])" class="text-gray-600">Receipt</button>
-                     <span class="text-red-600 text-sm ml-2">Cancelled</span>`;
-    } else {
-      // Pending or other statuses
-      actionsHtml = `<button onclick="openOrderReviewModal(${i})" class="text-blue-600">Check</button>
-                     <button onclick="showReceipt(orders[${i}])" class="text-green-600 ml-2">Receipt</button>`;
-    }
-    
-    ordersDT.row.add([
-      o.displayId || o.id,
-      `${o.customer}${itemsHtml}`,
-      o.contact || '-',
-      o.address || '-',
-      `₱${o.total.toFixed(2)}`,
-      `₱${o.discount.toFixed(2)}`,
-      `₱${o.netTotal.toFixed(2)}`,
-      paymentCell,
-      (o.createdAt ? formatOrderDate(o.createdAt) : (o.date ? formatOrderDate(o.date) : (o.created_at ? formatOrderDate(o.created_at) : new Date().toLocaleDateString()))),
-      `<span class="px-2 py-1 rounded text-xs ${statusClass}">${statusIcon} ${o.status || '-'}</span>`,
-      actionsHtml
-    ]);
-  });
-  // Force DataTable to redraw with our prioritized data
-  ordersDT.draw(false);
-  
-  // Ensure the table shows our prioritized order by disabling DataTable's internal sorting
-  ordersDT.order([]).draw();
   
 }
 
@@ -1772,17 +1700,53 @@ function setupLowStockSearch() {
 function renderSuppliers() {
   if (!suppliersDT) {
     suppliersDT = $('#suppliersTable').DataTable({
+      processing: true,
+      serverSide: true,
       paging: true,
       searching: true,
       info: true,
       dom: 'ltip',
       order: [[0, 'asc']],
+      ajax: {
+        url: `${window.APP_CONFIG.API_BASE_URL}/suppliers/datatables`,
+        type: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+        },
+        error: function(xhr, error, thrown) {
+          console.error('DataTables Ajax error:', {
+            xhr: xhr,
+            error: error,
+            thrown: thrown,
+            url: `${window.APP_CONFIG.API_BASE_URL}/suppliers/datatables`
+          });
+          
+          // Show user-friendly error message
+          Swal.fire({ icon: 'error', title: 'Unable to load suppliers', text: 'Unable to load suppliers.' });
+        }
+      },
       columns: [
-        { title: 'Supplier' },
-        { title: 'Contact' },
-        { title: 'Items Supplied' },
-        { title: 'Last Delivery' },
-        { title: 'Actions', orderable: false }
+        { 
+          title: 'Supplier',
+          data: 'name'
+        },
+        { 
+          title: 'Contact',
+          data: 'contact'
+        },
+        { 
+          title: 'Items Supplied',
+          data: 'items'
+        },
+        { 
+          title: 'Last Delivery',
+          data: 'last_delivery'
+        },
+        { 
+          title: 'Actions', 
+          data: 'actions',
+          orderable: false
+        }
       ]
     });
     const sSearch = document.getElementById('suppliersSearch');
@@ -1790,25 +1754,10 @@ function renderSuppliers() {
     const sWrapper = document.getElementById('suppliersControlsLength');
     const sLengthNode = document.querySelector('#suppliersTable_wrapper .dataTables_length');
     if (sWrapper && sLengthNode) sWrapper.appendChild(sLengthNode);
+  } else {
+    // DataTable already exists, just reload it
+    suppliersDT.ajax.reload();
   }
-  suppliersDT.clear();
-  const fmtDate = (val) => {
-    if (!val) return '-';
-    const d = new Date(val);
-    if (Number.isNaN(d.getTime())) return '-';
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-  };
-  suppliers.forEach((s, i) => {
-    suppliersDT.row.add([
-      s.name,
-      s.contact,
-      (s.items || []).join(', '),
-      fmtDate(s.lastDelivery),
-      `<button onclick="editSupplier(${i})" class="text-blue-600">Edit</button>
-       <button onclick="deleteSupplier(${i})" class="text-red-600 ml-2">Delete</button>`
-    ]);
-  });
-  suppliersDT.draw(false);
   populateRestockSuppliersSelect();
 }
 
