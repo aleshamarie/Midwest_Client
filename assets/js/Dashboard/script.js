@@ -495,11 +495,11 @@ async function fetchProductImageFromTable(productId) {
 
 async function deleteProductImageFromTable(productId) {
   console.log('deleteProductImageFromTable called with productId:', productId);
-  const { isConfirmed } = await Swal.fire({ icon: 'warning', title: 'Remove product image?', text: 'This will permanently delete the image file from the server.', showCancelButton: true, confirmButtonText: 'Remove' });
+  const { isConfirmed } = await Swal.fire({ icon: 'warning', title: 'Remove product image?', text: 'This will permanently delete the image from Cloudinary.', showCancelButton: true, confirmButtonText: 'Remove' });
   if (!isConfirmed) return;
   
   try {
-    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -516,7 +516,7 @@ async function deleteProductImageFromTable(productId) {
     
     // Refresh the table
     inventoryDT.ajax.reload();
-    Swal.fire({ icon: 'success', title: 'Image removed', text: `Deleted file: ${result.deletedFile || 'unknown'}` });
+    Swal.fire({ icon: 'success', title: 'Image removed', text: 'Image deleted from Cloudinary successfully' });
   } catch (error) {
     console.error('Image deletion failed:', error);
     Swal.fire({ icon: 'error', title: 'Failed to remove image', text: String(error.message || '') });
@@ -641,25 +641,7 @@ async function fetchProductImage(productId) {
   try {
     console.log('Fetching image for product:', productId);
     
-    // Try base64 endpoint first (if server supports GET)
-    try {
-      const base64Response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        }
-      });
-      
-      if (base64Response.ok) {
-        const result = await base64Response.json();
-        console.log('Image fetched via base64 endpoint:', result);
-        return result;
-      }
-    } catch (base64Error) {
-      console.log('Base64 endpoint not available, trying regular image endpoint');
-    }
-    
-    // Fallback to regular image endpoint
+    // Get image URL from Cloudinary
     const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image`, {
       method: 'GET',
       headers: {
@@ -675,20 +657,14 @@ async function fetchProductImage(productId) {
       throw new Error(`Failed to fetch image: ${response.status}`);
     }
     
-    // For binary image data, we need to convert it to base64
-    const imageBlob = await response.blob();
-    const base64Data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(imageBlob);
-    });
-    
-    console.log('Image fetched successfully via regular endpoint');
+    const imageData = await response.json();
+    console.log('Cloudinary image URL fetched successfully');
     
     return {
-      dataUrl: base64Data,
-      mimeType: imageBlob.type
+      dataUrl: imageData.image_url,
+      imageUrl: imageData.image_url,
+      publicId: imageData.public_id,
+      source: 'cloudinary'
     };
   } catch (error) {
     console.error('Error fetching product image:', error);
@@ -779,75 +755,35 @@ async function uploadProductImage(productId, imageFile) {
     console.log('Uploading image for product:', productId);
     console.log('Original file size:', Math.round(imageFile.size / 1024), 'KB');
     
-    // Try base64 upload first (with compression)
-    try {
-      const compressedImageData = await compressImage(imageFile, 0.8, 800); // 80% quality, max 800px width
-      console.log('Compressed image size:', Math.round(compressedImageData.length / 1024), 'KB');
-      
-      // Use FormData instead of JSON to avoid URL length issues
-      const formData = new FormData();
-      formData.append('productId', productId);
-      formData.append('imageData', compressedImageData);
-      
-      const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image/base64`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-          // Don't set Content-Type for FormData, let browser set it with boundary
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Base64 upload failed:', response.status, errorText);
-        throw new Error(`Base64 upload failed: ${response.status} - ${errorText}`);
-      }
-      
-      const result = await response.json();
-      console.log('Base64 upload successful:', result);
-      
-      // Update local product with new image URL
-      const productIndex = products.findIndex(p => p.id === productId);
-      if (productIndex !== -1) {
-        products[productIndex].image_url = result.product.image_url;
-        localStorage.setItem('products', JSON.stringify(products));
-      }
-      
-      return result;
-    } catch (base64Error) {
-      console.warn('Base64 upload failed, trying regular file upload:', base64Error.message);
-      
-      // Fallback to regular file upload
-      const formData = new FormData();
-      formData.append('image', imageFile);
-      
-      const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`
-        },
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('File upload failed:', response.status, errorText);
-        throw new Error(`File upload failed: ${response.status} - ${errorText}`);
-      }
-      
-      const result = await response.json();
-      console.log('File upload successful:', result);
-      
-      // Update local product with new image URL
-      const productIndex = products.findIndex(p => p.id === productId);
-      if (productIndex !== -1) {
-        products[productIndex].image_url = result.product.image_url;
-        localStorage.setItem('products', JSON.stringify(products));
-      }
-      
-      return result;
+    // Upload directly to Cloudinary via server
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Cloudinary upload failed:', response.status, errorText);
+      throw new Error(`Image upload failed: ${response.status} - ${errorText}`);
     }
+    
+    const result = await response.json();
+    console.log('Cloudinary upload successful:', result);
+    
+    // Update local product with new image URL
+    const productIndex = products.findIndex(p => p.id === productId);
+    if (productIndex !== -1) {
+      products[productIndex].image_url = result.product.image_url;
+      localStorage.setItem('products', JSON.stringify(products));
+    }
+    
+    return result;
   } catch (error) {
     console.error('Image upload error:', error);
     throw error;
@@ -893,12 +829,12 @@ async function deleteProductImage(productIndex) {
     return;
   }
   
-  if (!confirm('Remove image from this product? This will permanently delete the image file from the server.')) return;
+  if (!confirm('Remove image from this product? This will permanently delete the image from Cloudinary.')) return;
   
   try {
     console.log(`Deleting image for product ${product.id} (${product.name})`);
     
-    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${product.id}/image/base64`, {
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${product.id}/image`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('authToken')}`
@@ -919,7 +855,7 @@ async function deleteProductImage(productIndex) {
     
     // Refresh the inventory display
     renderInventory();
-    Swal.fire({ icon: 'success', title: 'Image removed', text: `Deleted file: ${result.deletedFile || 'unknown'}` });
+    Swal.fire({ icon: 'success', title: 'Image removed', text: 'Image deleted from Cloudinary successfully' });
   } catch (error) {
     console.error('Image deletion failed:', error);
     Swal.fire({ icon: 'error', title: 'Failed to remove image', text: String(error.message || '') });
