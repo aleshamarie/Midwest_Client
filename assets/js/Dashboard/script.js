@@ -755,6 +755,12 @@ async function uploadProductImage(productId, imageFile) {
     console.log('Uploading image for product:', productId);
     console.log('Original file size:', Math.round(imageFile.size / 1024), 'KB');
     
+    // Check file size (5MB limit)
+    const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+    if (imageFile.size > maxSize) {
+      throw new Error(`Image file too large. Maximum size is 5MB. Current size: ${Math.round(imageFile.size / 1024 / 1024 * 100) / 100}MB`);
+    }
+    
     // Upload directly to Cloudinary via server
     const formData = new FormData();
     formData.append('image', imageFile);
@@ -893,12 +899,13 @@ function handleProductImageSelect(event) {
     return;
   }
   
-  // Validate file size (1MB limit for deployed server)
-  if (file.size > 1024 * 1024) {
+  // Validate file size (5MB limit)
+  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+  if (file.size > maxSize) {
     Swal.fire({ 
       icon: 'warning', 
       title: 'File too large', 
-      text: 'File size must be less than 1MB. The image will be automatically compressed.' 
+      text: `File size must be less than 5MB. Current size: ${Math.round(file.size / 1024 / 1024 * 100) / 100}MB` 
     });
     return;
   }
