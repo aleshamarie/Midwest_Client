@@ -1463,33 +1463,178 @@ function closeOrderModal() {
 
 // Order Items Management Functions
 function addOrderItem() {
-  // Create a simple item selection dialog
-  const productName = prompt('Enter product name:');
-  if (!productName) return;
+  // Open product selection modal instead of using prompts
+  openProductSelectionModal();
+}
+
+// Product Selection Modal Functions
+let allProducts = [];
+let filteredProducts = [];
+let selectedProduct = null;
+
+async function openProductSelectionModal() {
+  const modal = document.getElementById('productSelectionModal');
+  const loading = document.getElementById('productsLoading');
+  const productsList = document.getElementById('productsList');
+  const noProductsMessage = document.getElementById('noProductsMessage');
+  const searchInput = document.getElementById('productSearchInput');
   
-  const quantity = prompt('Enter quantity:', '1');
-  if (!quantity || isNaN(quantity) || quantity <= 0) {
-    Swal.fire({ icon: 'warning', title: 'Invalid quantity' });
+  modal.classList.remove('hidden');
+  loading.classList.remove('hidden');
+  productsList.innerHTML = '';
+  noProductsMessage.classList.add('hidden');
+  searchInput.value = '';
+  
+  try {
+    // Load all products
+    allProducts = await fetchAllProducts();
+    filteredProducts = [...allProducts];
+    
+    loading.classList.add('hidden');
+    renderProductsList();
+  } catch (error) {
+    console.error('Failed to load products:', error);
+    loading.classList.add('hidden');
+    noProductsMessage.classList.remove('hidden');
+    noProductsMessage.textContent = 'Failed to load products';
+  }
+}
+
+function closeProductSelectionModal() {
+  const modal = document.getElementById('productSelectionModal');
+  modal.classList.add('hidden');
+  allProducts = [];
+  filteredProducts = [];
+}
+
+function filterProducts() {
+  const searchTerm = document.getElementById('productSearchInput').value.toLowerCase();
+  filteredProducts = allProducts.filter(product => 
+    product.name.toLowerCase().includes(searchTerm) ||
+    (product.category && product.category.toLowerCase().includes(searchTerm)) ||
+    (product.description && product.description.toLowerCase().includes(searchTerm))
+  );
+  renderProductsList();
+}
+
+function renderProductsList() {
+  const productsList = document.getElementById('productsList');
+  const noProductsMessage = document.getElementById('noProductsMessage');
+  
+  if (filteredProducts.length === 0) {
+    productsList.innerHTML = '';
+    noProductsMessage.classList.remove('hidden');
     return;
   }
   
-  const price = prompt('Enter unit price:', '0.00');
-  if (!price || isNaN(price) || price < 0) {
-    Swal.fire({ icon: 'warning', title: 'Invalid price' });
+  noProductsMessage.classList.add('hidden');
+  productsList.innerHTML = filteredProducts.map(product => `
+    <div class="flex items-center justify-between bg-gray-50 p-3 rounded border hover:bg-gray-100 cursor-pointer" 
+         onclick="selectProduct(${product.id})">
+      <div class="flex-1">
+        <div class="font-medium">${product.name}</div>
+        <div class="text-sm text-gray-600">
+          ${product.category ? `Category: ${product.category}` : ''}
+          ${product.stock !== undefined ? ` • Stock: ${product.stock}` : ''}
+        </div>
+        ${product.description ? `<div class="text-xs text-gray-500 mt-1">${product.description}</div>` : ''}
+      </div>
+      <div class="text-right">
+        <div class="font-semibold text-green-600">₱${Number(product.price || 0).toFixed(2)}</div>
+        <button class="mt-1 bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700">
+          Select
+        </button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function selectProduct(productId) {
+  const product = allProducts.find(p => p.id === productId);
+  if (!product) return;
+  
+  // Store selected product and open quantity input modal
+  selectedProduct = product;
+  openQuantityInputModal();
+  
+  // Close the product selection modal
+  closeProductSelectionModal();
+}
+
+// Quantity Input Modal Functions
+function openQuantityInputModal() {
+  if (!selectedProduct) return;
+  
+  const modal = document.getElementById('quantityInputModal');
+  const productName = document.getElementById('quantityProductName');
+  const unitPrice = document.getElementById('quantityUnitPrice');
+  const quantityInput = document.getElementById('quantityInput');
+  
+  productName.textContent = selectedProduct.name;
+  unitPrice.textContent = Number(selectedProduct.price || 0).toFixed(2);
+  quantityInput.value = '1';
+  
+  // Update total price when quantity changes
+  quantityInput.oninput = updateQuantityTotal;
+  updateQuantityTotal();
+  
+  modal.classList.remove('hidden');
+  quantityInput.focus();
+  quantityInput.select();
+}
+
+function closeQuantityInputModal() {
+  const modal = document.getElementById('quantityInputModal');
+  modal.classList.add('hidden');
+  selectedProduct = null;
+}
+
+function updateQuantityTotal() {
+  const quantityInput = document.getElementById('quantityInput');
+  const unitPrice = document.getElementById('quantityUnitPrice');
+  const totalPrice = document.getElementById('quantityTotalPrice');
+  
+  const quantity = parseInt(quantityInput.value) || 0;
+  const unitPriceValue = parseFloat(unitPrice.textContent) || 0;
+  const total = quantity * unitPriceValue;
+  
+  totalPrice.textContent = total.toFixed(2);
+}
+
+function confirmQuantity() {
+  if (!selectedProduct) return;
+  
+  const quantityInput = document.getElementById('quantityInput');
+  const quantity = parseInt(quantityInput.value);
+  
+  if (!quantity || quantity <= 0) {
+    Swal.fire({ icon: 'warning', title: 'Invalid quantity', text: 'Please enter a valid quantity greater than 0.' });
     return;
   }
   
   const item = {
     id: Date.now(), // Simple ID for tracking
-    product_name: productName,
-    quantity: parseInt(quantity),
-    unit_price: parseFloat(price),
-    total_price: parseInt(quantity) * parseFloat(price)
+    product_name: selectedProduct.name,
+    quantity: quantity,
+    unit_price: parseFloat(selectedProduct.price || 0),
+    total_price: quantity * parseFloat(selectedProduct.price || 0)
   };
   
   orderItems.push(item);
   updateOrderItemsDisplay();
   updateOrderTotal();
+  
+  // Close the quantity input modal
+  closeQuantityInputModal();
+  
+  // Show success message
+  Swal.fire({ 
+    icon: 'success', 
+    title: 'Item Added', 
+    text: `${selectedProduct.name} (${quantity}x) added to order`,
+    timer: 2000,
+    showConfirmButton: false
+  });
 }
 
 function removeOrderItem(itemId) {
