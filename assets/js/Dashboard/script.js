@@ -191,10 +191,9 @@ function setupInfiniteScroll() {
 }
 
 // Limit counts
-const DASHBOARD_LOW_STOCK_LIMIT = 20; // how many low-stock items to show on dashboard
-const LOW_STOCK_MODAL_LIMIT = 20; // how many items to show in modal by default
+const DASHBOARD_LOW_STOCK_LIMIT = 20;
+const LOW_STOCK_MODAL_LIMIT = 20;
 let showAllLowStockInModal = false;
-// Active date filter in YYYY-MM-DD (null => no filter)
 let activeDateFilter = null;
 
 function getLowStockThreshold(product) {
@@ -226,6 +225,7 @@ function renderInventory() {
   console.log('renderInventory called');
   if (!inventoryDT) {
     console.log('Initializing DataTable...');
+    $('#inventoryTable').addClass('excel-like');
     inventoryDT = $('#inventoryTable').DataTable({
       paging: true,
       pageLength: 25,
@@ -268,11 +268,8 @@ function renderInventory() {
           orderable: false,
           data: null,
           render: function(data, type, row) {
-            return `<button onclick="editProductFromTable('${row.id}')" class="text-blue-600">Edit</button>
-                    <button onclick="deleteProductFromTable('${row.id}')" class="text-red-600 ml-2">Delete</button>
-                    <button onclick="openRestockModalFromTable('${row.id}')" class="text-indigo-600 ml-2">Restock</button>
-                    <button onclick="fetchProductImageFromTable('${row.id}')" class="text-green-600 ml-2">Fetch Image</button>
-                    ${row.image_url ? `<button onclick="deleteProductImageFromTable('${row.id}')" class="text-orange-600 ml-2">Remove Image</button>` : ''}`;
+            // Consolidate actions into a single Edit entry; other actions are available inside the Edit modal
+            return `<button onclick="editProductFromTable('${row.id}')" class="text-blue-600">Edit</button>`;
           }
         }
       ],
@@ -378,8 +375,13 @@ async function editProductFromTable(productId) {
     document.getElementById('prodPrice').value = product.price;
     document.getElementById('prodStock').value = product.stock;
     
-    // Store the product ID for saving
-    document.getElementById('productModal').setAttribute('data-product-id', productId);
+    // Store the product ID for saving and enable extra actions in modal
+    const modal = document.getElementById('productModal');
+    modal.setAttribute('data-product-id', productId);
+    const receiveBtn = document.getElementById('editReceiveBtn');
+    const deleteBtn = document.getElementById('editDeleteBtn');
+    if (receiveBtn) receiveBtn.classList.remove('hidden');
+    if (deleteBtn) deleteBtn.classList.remove('hidden');
     
     // Fetch and display the existing image from MongoDB
     await displayProductImage(productId, 'productImagePreviewImg');
@@ -537,6 +539,12 @@ function openAddProductModal() {
   const modal = document.getElementById('productModal');
   console.log('Product modal element:', modal);
   if (modal) {
+    // Clear any previous product-id and hide extra action buttons (receive/delete)
+    modal.removeAttribute('data-product-id');
+    const receiveBtn = document.getElementById('editReceiveBtn');
+    const deleteBtn = document.getElementById('editDeleteBtn');
+    if (receiveBtn) receiveBtn.classList.add('hidden');
+    if (deleteBtn) deleteBtn.classList.add('hidden');
     modal.classList.remove('hidden');
     console.log('Product modal should be visible now');
   } else {
@@ -634,6 +642,23 @@ async function saveProduct() {
   
   closeProductModal();
   updateDashboard();
+}
+
+// Consolidated actions inside Edit Product modal
+function openRestockFromModal() {
+  const modal = document.getElementById('productModal');
+  const productId = modal && modal.getAttribute('data-product-id');
+  if (!productId) return;
+  closeProductModal();
+  openRestockModalFromTable(productId);
+}
+
+async function deleteProductFromModal() {
+  const modal = document.getElementById('productModal');
+  const productId = modal && modal.getAttribute('data-product-id');
+  if (!productId) return;
+  await deleteProductFromTable(productId);
+  closeProductModal();
 }
 
 // Fetch existing image from MongoDB for a product

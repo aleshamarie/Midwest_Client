@@ -93,3 +93,22 @@ table.dataTable tbody tr:nth-child(even) {
  #receiptContent td.num, #receiptContent th.num { text-align: right; }
  #receiptContent .rc-total-row td { font-weight: 600; }
  @media print { .no-print { display: none !important; } }
+
+ /* Excel-like table styling (scoped to inventory table) */
+ #inventoryTable.excel-like { border-collapse: separate; border-spacing: 0; }
+ #inventoryTable.excel-like thead th { position: sticky; top: 0; z-index: 2; }
+ #inventoryTable.excel-like th, #inventoryTable.excel-like td { 
+   border: 1px solid #d1d5db; /* gray-300 */
+   padding: 6px 8px; 
+   background-clip: padding-box;
+ }
+ #inventoryTable.excel-like thead th { 
+   background: #e5f1fb; /* light excel-like header */
+   color: #111827; 
+   font-weight: 600; 
+ }
+ #inventoryTable.excel-like tbody tr:nth-child(even) td { background: #f9fafb; }
+ #inventoryTable.excel-like tbody tr:hover td { background: #eef6ff; }
+ #inventoryTable.excel-like td.num, #inventoryTable.excel-like th.num { text-align: right; }
+ /* DataTables length/search wrappers inside inventory */
+ #inventorySection .dataTables_length select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; }
