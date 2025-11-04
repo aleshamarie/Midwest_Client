@@ -2199,22 +2199,37 @@ function showReceipt(order) {
   document.getElementById('receiptPayment').textContent = order.payment;
   document.getElementById('receiptRef').textContent = order.payment === 'GCash' && order.ref ? order.ref : '-';
   document.getElementById('receiptStatus').textContent = order.status;
-  document.getElementById('receiptTotal').textContent = order.total.toFixed(2);
-  document.getElementById('receiptDiscount').textContent = order.discount.toFixed(2);
-  document.getElementById('receiptNetTotal').textContent = order.netTotal.toFixed(2);
+  // Pre-fill using order object; will be reconciled after loading items
+  document.getElementById('receiptTotal').textContent = Number(order.total || order.totalPrice || 0).toFixed(2);
+  document.getElementById('receiptDiscount').textContent = Number(order.discount || 0).toFixed(2);
+  document.getElementById('receiptNetTotal').textContent = Number(order.netTotal || order.net_total || (Number(order.total || order.totalPrice || 0) - Number(order.discount || 0))).toFixed(2);
   // Load items into receipt table
   (async () => {
     try {
       let items = [];
+      // Prefer loading the full order with embedded items (more reliable)
       try {
-        const res = await apiFetch(`/orders/${order.id}/items`);
-        items = res.items || [];
-      } catch (_eAuth) {
-        const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${order.id}/items/public`);
-        if (r.ok) {
-          const j = await r.json();
-          items = j.items || [];
+        const full = await apiFetch(`/orders/${order.id}`);
+        if (full && full.order && Array.isArray(full.order.items) && full.order.items.length) {
+          items = full.order.items;
         }
+      } catch (_e1) {}
+      // Fallback to items endpoint
+      if (!items.length) {
+        try {
+          const res = await apiFetch(`/orders/${order.id}/items`);
+          items = res.items || [];
+        } catch (_eAuth) {
+          const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${order.id}/items/public`);
+          if (r.ok) {
+            const j = await r.json();
+            items = j.items || [];
+          }
+        }
+      }
+      // Final fallback: items carried on the order object
+      if (!items.length && Array.isArray(order.items)) {
+        items = order.items;
       }
       const rows = items.map(it => {
         // Handle different product name sources
@@ -2234,6 +2249,15 @@ function showReceipt(order) {
         </tr>`;
       }).join('');
       document.getElementById('receiptItems').innerHTML = rows || '<tr><td class="px-3 py-2" colspan="4">No items</td></tr>';
+      // Recompute totals from the loaded items (ensures accuracy)
+      if (items.length) {
+        const computedTotal = items.reduce((s, it) => s + Number(it.total_price || (Number(it.quantity||0) * Number(it.unit_price || it.price || 0))), 0);
+        const discount = Number(order.discount || 0);
+        const net = computedTotal - discount;
+        document.getElementById('receiptTotal').textContent = computedTotal.toFixed(2);
+        document.getElementById('receiptDiscount').textContent = discount.toFixed(2);
+        document.getElementById('receiptNetTotal').textContent = net.toFixed(2);
+      }
     } catch (_e) {
       document.getElementById('receiptItems').innerHTML = '<tr><td class="px-3 py-2" colspan="4">No items</td></tr>';
     }
