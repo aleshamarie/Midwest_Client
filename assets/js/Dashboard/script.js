@@ -2093,9 +2093,23 @@ function confirmRestock() {
     if (supplierId && productId) {
       apiFetch(`/suppliers/${supplierId}/restock`, { method: 'POST', body: JSON.stringify({ productId, qty, date }) })
         .then(() => refreshInventoryOnly())
-        .catch(()=>{});
+        .catch((error) => {
+          console.error('Restock API error:', error);
+          Swal.fire({ 
+            icon: 'error', 
+            title: 'Restock Failed', 
+            text: error.message || 'Failed to save restock to server. Changes saved locally only.' 
+          });
+        });
     }
-  } catch (_e) {}
+  } catch (error) {
+    console.error('Restock error:', error);
+    Swal.fire({ 
+      icon: 'error', 
+      title: 'Restock Error', 
+      text: error.message || 'An error occurred while processing restock.' 
+    });
+  }
 
   closeRestockModal();
   renderInventory();
@@ -2662,7 +2676,18 @@ async function apiFetch(path, options = {}) {
   const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(`${window.APP_CONFIG.API_BASE_URL}${path}`, { ...options, headers });
-  if (!res.ok) throw new Error('API error');
+  if (!res.ok) {
+    let errorMessage = 'API error';
+    try {
+      const errorData = await res.json();
+      errorMessage = errorData.message || errorMessage;
+    } catch (_e) {
+      errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+    }
+    const error = new Error(errorMessage);
+    error.status = res.status;
+    throw error;
+  }
   return res.json();
 }
 
