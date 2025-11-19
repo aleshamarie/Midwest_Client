@@ -20,6 +20,7 @@
     <h1 class="text-2xl font-bold mb-6">Midwest Grocery Store</h1>
     <ul>
       <li><button onclick="showSection('dashboardSection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">🏠 Dashboard</button></li>
+      <li><button onclick="showSection('analyticsSection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">📊 Sales Analytics</button></li>
       <li><button onclick="showSection('inventorySection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">📦 Inventory</button></li>
       <li>
         <button onclick="showSection('ordersSection')" class="w-full text-left px-4 py-2 hover:bg-blue-700 rounded mb-2">📜 Orders</button>
@@ -194,13 +195,24 @@
         </div>
       </div>
 
-      <!-- SALES ANALYTICS & COMPARISON -->
-      <div class="mt-4 bg-white p-4 rounded shadow">
+    </section>
+
+    <!-- SALES ANALYTICS & COMPARISON -->
+    <section id="analyticsSection" class="hidden">
+      <div class="bg-white p-4 rounded-lg shadow mb-6">
         <div class="flex justify-between items-center mb-4">
-          <h3 class="font-semibold text-lg">Sales Analytics & Comparison</h3>
-          <span id="analyticsDateLabel" class="text-xs text-gray-500"></span>
+          <h2 class="text-lg font-semibold">Sales Analytics & Comparison</h2>
+          <div class="flex items-center gap-4">
+            <label class="text-sm text-gray-600">Filter Date:</label>
+            <input type="date" id="analyticsDateFilter" class="border rounded px-3 py-2" title="Filter by date" onchange="onDateFilterChange(this.value)">
+            <button onclick="onDateFilterChange('')" class="bg-gray-400 text-white px-3 py-2 rounded text-sm hover:bg-gray-500" title="Clear date filter">Clear</button>
+            <span id="analyticsDateLabel" class="text-xs text-gray-500"></span>
+            <button onclick="showSection('dashboardSection')" class="bg-gray-500 text-white px-4 py-1 rounded text-sm">Back to Dashboard</button>
+          </div>
         </div>
-        
+      </div>
+
+      <div class="bg-white p-4 rounded shadow">
         <!-- Key Performance Indicators -->
         <div class="grid grid-cols-4 gap-4 mb-6">
           <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">

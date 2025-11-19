@@ -207,6 +207,21 @@ function showSection(id) {
   document.querySelectorAll('main section').forEach(sec => sec.classList.add('hidden'));
   document.getElementById(id).classList.remove('hidden');
   if (id === 'dashboardSection') updateDashboard();
+  if (id === 'analyticsSection') {
+    // Load analytics data when section is shown
+    loadDailySalesSummary();
+    // Sync the analytics date filter with the main date filter
+    const analyticsDateFilter = document.getElementById('analyticsDateFilter');
+    if (analyticsDateFilter) {
+      analyticsDateFilter.value = activeDateFilter || '';
+    }
+    // Initialize chart if not already done
+    setTimeout(() => {
+      if (!comparisonChart) {
+        initializeComparisonChart();
+      }
+    }, 100);
+  }
   if (id === 'inventorySection') {
     console.log('Rendering inventory section...');
     renderInventory();
@@ -2893,6 +2908,7 @@ function onDateFilterChange(value) {
   // Also load daily sales summary and orders-by-date table
   loadDailySalesSummary();
   loadOrdersByDateTable();
+  // Analytics will automatically update via loadDailySalesSummary which calls updateSalesAnalytics
 }
 
 // --------------------------- DAILY SALES SUMMARY ---------------------------
