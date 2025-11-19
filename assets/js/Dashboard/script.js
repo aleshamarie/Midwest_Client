@@ -2895,7 +2895,6 @@ async function loadDailySalesSummary() {
   try {
     const token = localStorage.getItem('authToken');
     const date = activeDateFilter || new Date().toISOString().slice(0, 10);
-    document.getElementById('dsDate').textContent = date;
     const res = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/sales-by-date?date=${date}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -2903,17 +2902,30 @@ async function loadDailySalesSummary() {
     const has = (data.rows && data.rows.length);
     document.getElementById('dsEmpty').classList.toggle('hidden', !!has);
     const row = has ? data.rows[0] : null;
-    const prev = data.previousDay || null;
+    const today = data.todayData || null;
+    const isToday = data.isToday || false;
+    
+    // Update date label to show comparison context
+    const dateLabel = isToday ? `${date} (Today)` : `${date} vs Today`;
+    document.getElementById('dsDate').textContent = dateLabel;
     const fmt = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     
     // Helper function to calculate and display change
-    const displayChange = (currentValue, previousValue, elementId, isPercent = false, reverseColor = false) => {
-      const current = Number(currentValue || 0);
-      const previous = Number(previousValue || 0);
-      const change = current - previous;
+    const displayChange = (selectedValue, todayValue, elementId, isPercent = false, reverseColor = false) => {
+      // Don't show comparison if selected date is today
+      if (isToday) {
+        const changeElement = document.getElementById(elementId);
+        changeElement.textContent = '';
+        changeElement.className = 'text-xs mr-1';
+        return;
+      }
+      
+      const selected = Number(selectedValue || 0);
+      const todayVal = Number(todayValue || 0);
+      const change = selected - todayVal;
       const changeElement = document.getElementById(elementId);
       
-      if (!prev || change === 0) {
+      if (!today || change === 0) {
         changeElement.textContent = '';
         changeElement.className = 'text-xs mr-1';
         return;
@@ -2923,21 +2935,22 @@ async function loadDailySalesSummary() {
       // Calculate percentage change, handling division by zero
       let changePercent = 0;
       let showPercent = true;
-      if (previous !== 0) {
-        changePercent = (change / previous) * 100;
-      } else if (current !== 0) {
-        // If previous was 0 and current is not, show "New" instead of percentage
+      if (todayVal !== 0) {
+        changePercent = (change / todayVal) * 100;
+      } else if (selected !== 0) {
+        // If today was 0 and selected date is not, show "New" instead of percentage
         showPercent = false;
       }
       
       // For refunds, discounts, and cost of goods, reverse the color logic
+      // Note: When comparing selected date vs today, we want to show if selected date is better than today
       const isGood = reverseColor ? !isIncrease : isIncrease;
       
       if (isPercent) {
         // For margin, show percentage point change
         changeElement.textContent = `${isIncrease ? '+' : ''}${change.toFixed(2)}pp`;
-      } else if (!showPercent && previous === 0 && current !== 0) {
-        // Show "New" when going from 0 to a value
+      } else if (!showPercent && todayVal === 0 && selected !== 0) {
+        // Show "New" when today was 0 and selected date has a value
         changeElement.textContent = 'New';
       } else {
         // For monetary values, show percentage change
@@ -2957,19 +2970,19 @@ async function loadDailySalesSummary() {
     document.getElementById('dsMargin').textContent = (Number(row?.margin_percent || 0)).toFixed(2);
     document.getElementById('dsTaxes').textContent = fmt(row?.taxes);
     
-    // Display changes
-    // For sales, profit, net sales: increase is good (green)
-    displayChange(row?.gross_sales, prev?.gross_sales, 'dsGrossChange');
-    displayChange(row?.net_sales, prev?.net_sales, 'dsNetChange');
-    displayChange(row?.gross_profit, prev?.gross_profit, 'dsProfitChange');
-    // For refunds, discounts, cost of goods: decrease is good (green)
-    displayChange(row?.refunds, prev?.refunds, 'dsRefundsChange', false, true);
-    displayChange(row?.discounts, prev?.discounts, 'dsDiscountsChange', false, true);
-    displayChange(row?.cost_of_goods, prev?.cost_of_goods, 'dsCogsChange', false, true);
-    // For margin, we compare the percentage points (increase is good)
-    displayChange(row?.margin_percent, prev?.margin_percent, 'dsMarginChange', true);
-    // For taxes, increase is typically not good (red)
-    displayChange(row?.taxes, prev?.taxes, 'dsTaxesChange', false, true);
+    // Display changes (comparing selected date vs today)
+    // For sales, profit, net sales: higher than today is good (green)
+    displayChange(row?.gross_sales, today?.gross_sales, 'dsGrossChange');
+    displayChange(row?.net_sales, today?.net_sales, 'dsNetChange');
+    displayChange(row?.gross_profit, today?.gross_profit, 'dsProfitChange');
+    // For refunds, discounts, cost of goods: lower than today is good (green)
+    displayChange(row?.refunds, today?.refunds, 'dsRefundsChange', false, true);
+    displayChange(row?.discounts, today?.discounts, 'dsDiscountsChange', false, true);
+    displayChange(row?.cost_of_goods, today?.cost_of_goods, 'dsCogsChange', false, true);
+    // For margin, we compare the percentage points (higher than today is good)
+    displayChange(row?.margin_percent, today?.margin_percent, 'dsMarginChange', true);
+    // For taxes, lower than today is good (green)
+    displayChange(row?.taxes, today?.taxes, 'dsTaxesChange', false, true);
   } catch (_e) {
     // ignore
   }
