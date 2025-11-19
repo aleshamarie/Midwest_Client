@@ -2903,7 +2903,51 @@ async function loadDailySalesSummary() {
     const has = (data.rows && data.rows.length);
     document.getElementById('dsEmpty').classList.toggle('hidden', !!has);
     const row = has ? data.rows[0] : null;
+    const prev = data.previousDay || null;
     const fmt = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    
+    // Helper function to calculate and display change
+    const displayChange = (currentValue, previousValue, elementId, isPercent = false, reverseColor = false) => {
+      const current = Number(currentValue || 0);
+      const previous = Number(previousValue || 0);
+      const change = current - previous;
+      const changeElement = document.getElementById(elementId);
+      
+      if (!prev || change === 0) {
+        changeElement.textContent = '';
+        changeElement.className = 'text-xs mr-1';
+        return;
+      }
+      
+      const isIncrease = change > 0;
+      // Calculate percentage change, handling division by zero
+      let changePercent = 0;
+      let showPercent = true;
+      if (previous !== 0) {
+        changePercent = (change / previous) * 100;
+      } else if (current !== 0) {
+        // If previous was 0 and current is not, show "New" instead of percentage
+        showPercent = false;
+      }
+      
+      // For refunds, discounts, and cost of goods, reverse the color logic
+      const isGood = reverseColor ? !isIncrease : isIncrease;
+      
+      if (isPercent) {
+        // For margin, show percentage point change
+        changeElement.textContent = `${isIncrease ? '+' : ''}${change.toFixed(2)}pp`;
+      } else if (!showPercent && previous === 0 && current !== 0) {
+        // Show "New" when going from 0 to a value
+        changeElement.textContent = 'New';
+      } else {
+        // For monetary values, show percentage change
+        changeElement.textContent = `${isIncrease ? '+' : ''}${changePercent.toFixed(1)}%`;
+      }
+      
+      changeElement.className = `text-xs mr-1 font-semibold ${isGood ? 'text-green-600' : 'text-red-600'}`;
+    };
+    
+    // Display values
     document.getElementById('dsGross').textContent = fmt(row?.gross_sales);
     document.getElementById('dsRefunds').textContent = fmt(row?.refunds);
     document.getElementById('dsDiscounts').textContent = fmt(row?.discounts);
@@ -2912,6 +2956,20 @@ async function loadDailySalesSummary() {
     document.getElementById('dsProfit').textContent = fmt(row?.gross_profit);
     document.getElementById('dsMargin').textContent = (Number(row?.margin_percent || 0)).toFixed(2);
     document.getElementById('dsTaxes').textContent = fmt(row?.taxes);
+    
+    // Display changes
+    // For sales, profit, net sales: increase is good (green)
+    displayChange(row?.gross_sales, prev?.gross_sales, 'dsGrossChange');
+    displayChange(row?.net_sales, prev?.net_sales, 'dsNetChange');
+    displayChange(row?.gross_profit, prev?.gross_profit, 'dsProfitChange');
+    // For refunds, discounts, cost of goods: decrease is good (green)
+    displayChange(row?.refunds, prev?.refunds, 'dsRefundsChange', false, true);
+    displayChange(row?.discounts, prev?.discounts, 'dsDiscountsChange', false, true);
+    displayChange(row?.cost_of_goods, prev?.cost_of_goods, 'dsCogsChange', false, true);
+    // For margin, we compare the percentage points (increase is good)
+    displayChange(row?.margin_percent, prev?.margin_percent, 'dsMarginChange', true);
+    // For taxes, increase is typically not good (red)
+    displayChange(row?.taxes, prev?.taxes, 'dsTaxesChange', false, true);
   } catch (_e) {
     // ignore
   }
