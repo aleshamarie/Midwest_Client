@@ -2872,6 +2872,11 @@ function setOrdersStatusFilter(kind) {
 
 init();
 
+// Initialize comparison chart after a short delay to ensure DOM is ready
+setTimeout(() => {
+  initializeComparisonChart();
+}, 500);
+
 // --------------------------- DATE FILTER UI HANDLERS ---------------------------
 function onDateFilterChange(value) {
   activeDateFilter = value || null;
@@ -2983,6 +2988,9 @@ async function loadDailySalesSummary() {
     displayChange(row?.margin_percent, today?.margin_percent, 'dsMarginChange', true);
     // For taxes, lower than today is good (green)
     displayChange(row?.taxes, today?.taxes, 'dsTaxesChange', false, true);
+    
+    // Update analytics section
+    updateSalesAnalytics(row, today, isToday, date);
   } catch (_e) {
     // ignore
   }
@@ -3021,6 +3029,276 @@ async function loadOrdersByDateTable() {
   } catch (_e) {
     // ignore
   }
+}
+
+// --------------------------- SALES ANALYTICS ---------------------------
+let comparisonChart = null;
+
+function initializeComparisonChart() {
+  const ctx = document.getElementById('comparisonChart');
+  if (!ctx) return;
+  
+  comparisonChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: ['Gross Sales', 'Net Sales', 'Gross Profit', 'Cost of Goods'],
+      datasets: [
+        {
+          label: 'Selected Date',
+          backgroundColor: 'rgba(59, 130, 246, 0.7)',
+          borderColor: 'rgb(59, 130, 246)',
+          borderWidth: 1,
+          data: [0, 0, 0, 0]
+        },
+        {
+          label: 'Today',
+          backgroundColor: 'rgba(16, 185, 129, 0.7)',
+          borderColor: 'rgb(16, 185, 129)',
+          borderWidth: 1,
+          data: [0, 0, 0, 0]
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: {
+        legend: {
+          position: 'top',
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return context.dataset.label + ': ₱' + Number(context.parsed.y).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              });
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            callback: function(value) {
+              return '₱' + Number(value).toLocaleString('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+              });
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+function updateSalesAnalytics(selectedData, todayData, isToday, date) {
+  if (!selectedData) {
+    // Clear analytics if no data
+    document.getElementById('analyticsNetSales').textContent = '₱0.00';
+    document.getElementById('analyticsProfit').textContent = '₱0.00';
+    document.getElementById('analyticsMargin').textContent = '0.00%';
+    document.getElementById('analyticsEfficiency').textContent = '0%';
+    document.getElementById('analyticsDateLabel').textContent = '';
+    document.getElementById('performanceBreakdown').innerHTML = '';
+    document.getElementById('analyticsInsights').innerHTML = '<p class="text-gray-500">No data available for analysis.</p>';
+    return;
+  }
+
+  const fmt = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtPercent = (n) => (Number(n || 0)).toFixed(2);
+  
+  const selected = {
+    gross_sales: Number(selectedData.gross_sales || 0),
+    net_sales: Number(selectedData.net_sales || 0),
+    gross_profit: Number(selectedData.gross_profit || 0),
+    cost_of_goods: Number(selectedData.cost_of_goods || 0),
+    margin_percent: Number(selectedData.margin_percent || 0),
+    discounts: Number(selectedData.discounts || 0),
+    refunds: Number(selectedData.refunds || 0)
+  };
+
+  const today = todayData ? {
+    gross_sales: Number(todayData.gross_sales || 0),
+    net_sales: Number(todayData.net_sales || 0),
+    gross_profit: Number(todayData.gross_profit || 0),
+    cost_of_goods: Number(todayData.cost_of_goods || 0),
+    margin_percent: Number(todayData.margin_percent || 0),
+    discounts: Number(todayData.discounts || 0),
+    refunds: Number(todayData.refunds || 0)
+  } : null;
+
+  // Update KPI cards
+  document.getElementById('analyticsNetSales').textContent = '₱' + fmt(selected.net_sales);
+  document.getElementById('analyticsProfit').textContent = '₱' + fmt(selected.gross_profit);
+  document.getElementById('analyticsMargin').textContent = fmtPercent(selected.margin_percent) + '%';
+  
+  // Calculate efficiency score (weighted performance vs today)
+  let efficiencyScore = 0;
+  if (today && !isToday) {
+    const netSalesChange = today.net_sales > 0 ? ((selected.net_sales - today.net_sales) / today.net_sales) * 100 : 0;
+    const profitChange = today.gross_profit > 0 ? ((selected.gross_profit - today.gross_profit) / today.gross_profit) * 100 : 0;
+    const marginChange = selected.margin_percent - today.margin_percent;
+    const costEfficiency = today.cost_of_goods > 0 ? ((today.cost_of_goods - selected.cost_of_goods) / today.cost_of_goods) * 100 : 0;
+    
+    efficiencyScore = (netSalesChange * 0.3 + profitChange * 0.4 + marginChange * 0.2 + costEfficiency * 0.1);
+    efficiencyScore = Math.max(-100, Math.min(100, efficiencyScore));
+  }
+  document.getElementById('analyticsEfficiency').textContent = (efficiencyScore >= 0 ? '+' : '') + fmtPercent(efficiencyScore) + '%';
+  document.getElementById('analyticsEfficiency').className = 'text-2xl font-bold ' + (efficiencyScore >= 0 ? 'text-green-700' : 'text-red-700');
+
+  // Update change indicators
+  const updateChangeIndicator = (elementId, selectedVal, todayVal, reverse = false) => {
+    const element = document.getElementById(elementId);
+    if (!today || isToday || selectedVal === todayVal) {
+      element.textContent = '';
+      element.className = 'text-xs mt-1';
+      return;
+    }
+    const change = selectedVal - todayVal;
+    const changePercent = todayVal > 0 ? ((change / todayVal) * 100) : (selectedVal > 0 ? 100 : 0);
+    const isGood = reverse ? change < 0 : change > 0;
+    element.textContent = (change >= 0 ? '+' : '') + fmtPercent(changePercent) + '%';
+    element.className = 'text-xs mt-1 font-semibold ' + (isGood ? 'text-green-600' : 'text-red-600');
+  };
+
+  updateChangeIndicator('analyticsNetSalesChange', selected.net_sales, today?.net_sales);
+  updateChangeIndicator('analyticsProfitChange', selected.gross_profit, today?.gross_profit);
+  updateChangeIndicator('analyticsMarginChange', selected.margin_percent, today?.margin_percent);
+
+  // Update date label
+  document.getElementById('analyticsDateLabel').textContent = isToday ? 'Viewing Today\'s Data' : `Comparing ${date} with Today`;
+
+  // Update comparison chart
+  if (comparisonChart) {
+    comparisonChart.data.datasets[0].data = [
+      selected.gross_sales,
+      selected.net_sales,
+      selected.gross_profit,
+      selected.cost_of_goods
+    ];
+    comparisonChart.data.datasets[1].data = today ? [
+      today.gross_sales,
+      today.net_sales,
+      today.gross_profit,
+      today.cost_of_goods
+    ] : [0, 0, 0, 0];
+    comparisonChart.update();
+  }
+
+  // Update performance breakdown
+  const breakdown = document.getElementById('performanceBreakdown');
+  breakdown.innerHTML = '';
+  
+  const metrics = [
+    { label: 'Gross Sales', selected: selected.gross_sales, today: today?.gross_sales, icon: '💵' },
+    { label: 'Net Sales', selected: selected.net_sales, today: today?.net_sales, icon: '📊' },
+    { label: 'Gross Profit', selected: selected.gross_profit, today: today?.gross_profit, icon: '💰' },
+    { label: 'Cost of Goods', selected: selected.cost_of_goods, today: today?.cost_of_goods, icon: '📦', reverse: true },
+    { label: 'Discounts', selected: selected.discounts, today: today?.discounts, icon: '🎫', reverse: true },
+    { label: 'Refunds', selected: selected.refunds, today: today?.refunds, icon: '↩️', reverse: true }
+  ];
+
+  metrics.forEach(metric => {
+    if (isToday && !today) return;
+    
+    const change = metric.selected - (metric.today || 0);
+    const changePercent = metric.today > 0 ? ((change / metric.today) * 100) : (metric.selected > 0 ? 100 : 0);
+    const isGood = metric.reverse ? change < 0 : change > 0;
+    const changeText = isToday ? '' : (change === 0 ? 'No change' : `${change >= 0 ? '+' : ''}${fmtPercent(changePercent)}%`);
+    
+    const div = document.createElement('div');
+    div.className = 'flex items-center justify-between p-2 bg-white rounded border';
+    div.innerHTML = `
+      <div class="flex items-center gap-2">
+        <span class="text-lg">${metric.icon}</span>
+        <span class="text-sm font-medium">${metric.label}</span>
+      </div>
+      <div class="text-right">
+        <div class="text-sm font-semibold">₱${fmt(metric.selected)}</div>
+        ${!isToday && changeText ? `<div class="text-xs ${isGood ? 'text-green-600' : change === 0 ? 'text-gray-500' : 'text-red-600'}">${changeText}</div>` : ''}
+      </div>
+    `;
+    breakdown.appendChild(div);
+  });
+
+  // Generate insights
+  const insights = document.getElementById('analyticsInsights');
+  insights.innerHTML = '';
+  
+  if (isToday) {
+    insights.innerHTML = '<p class="text-gray-600">Viewing today\'s data. Select a different date to see comparison insights.</p>';
+    return;
+  }
+
+  if (!today) {
+    insights.innerHTML = '<p class="text-gray-600">No data available for today to generate insights.</p>';
+    return;
+  }
+
+  const insightsList = [];
+  
+  // Net Sales insight
+  if (selected.net_sales > today.net_sales) {
+    const increase = ((selected.net_sales - today.net_sales) / today.net_sales * 100).toFixed(1);
+    insightsList.push(`✅ <strong>Net Sales</strong> were ${increase}% higher than today, indicating strong performance.`);
+  } else if (selected.net_sales < today.net_sales) {
+    const decrease = ((today.net_sales - selected.net_sales) / today.net_sales * 100).toFixed(1);
+    insightsList.push(`⚠️ <strong>Net Sales</strong> were ${decrease}% lower than today.`);
+  }
+
+  // Profit insight
+  if (selected.gross_profit > today.gross_profit) {
+    const increase = ((selected.gross_profit - today.gross_profit) / today.gross_profit * 100).toFixed(1);
+    insightsList.push(`💰 <strong>Gross Profit</strong> was ${increase}% higher, showing better profitability.`);
+  } else if (selected.gross_profit < today.gross_profit) {
+    const decrease = ((today.gross_profit - selected.gross_profit) / today.gross_profit * 100).toFixed(1);
+    insightsList.push(`📉 <strong>Gross Profit</strong> was ${decrease}% lower than today.`);
+  }
+
+  // Margin insight
+  if (selected.margin_percent > today.margin_percent) {
+    const diff = (selected.margin_percent - today.margin_percent).toFixed(2);
+    insightsList.push(`📊 <strong>Profit Margin</strong> was ${diff} percentage points higher, indicating better cost efficiency.`);
+  } else if (selected.margin_percent < today.margin_percent) {
+    const diff = (today.margin_percent - selected.margin_percent).toFixed(2);
+    insightsList.push(`📊 <strong>Profit Margin</strong> was ${diff} percentage points lower.`);
+  }
+
+  // Cost efficiency
+  if (selected.cost_of_goods < today.cost_of_goods && selected.net_sales > 0) {
+    const savings = ((today.cost_of_goods - selected.cost_of_goods) / today.cost_of_goods * 100).toFixed(1);
+    insightsList.push(`💡 <strong>Cost of Goods</strong> was ${savings}% lower, showing better inventory management.`);
+  } else if (selected.cost_of_goods > today.cost_of_goods) {
+    const increase = ((selected.cost_of_goods - today.cost_of_goods) / today.cost_of_goods * 100).toFixed(1);
+    insightsList.push(`⚠️ <strong>Cost of Goods</strong> was ${increase}% higher, which may have impacted profitability.`);
+  }
+
+  // Discount analysis
+  if (selected.discounts > today.discounts) {
+    const increase = ((selected.discounts - today.discounts) / (today.discounts || 1) * 100).toFixed(1);
+    insightsList.push(`🎫 <strong>Discounts</strong> were ${increase}% higher, potentially driving more sales volume.`);
+  }
+
+  // Overall recommendation
+  if (efficiencyScore > 20) {
+    insightsList.push(`<strong class="text-green-700">🌟 Excellent Performance:</strong> This date significantly outperformed today across multiple metrics.`);
+  } else if (efficiencyScore > 0) {
+    insightsList.push(`<strong class="text-blue-700">👍 Good Performance:</strong> This date performed better than today.`);
+  } else if (efficiencyScore > -20) {
+    insightsList.push(`<strong class="text-orange-700">📊 Average Performance:</strong> Similar performance to today.`);
+  } else {
+    insightsList.push(`<strong class="text-red-700">⚠️ Below Average:</strong> This date underperformed compared to today. Consider analyzing factors that may have contributed.`);
+  }
+
+  insightsList.forEach(insight => {
+    const p = document.createElement('p');
+    p.className = 'flex items-start gap-2';
+    p.innerHTML = insight;
+    insights.appendChild(p);
+  });
 }
 
 // Helper: fetch all products via lazy endpoint (auth->public)

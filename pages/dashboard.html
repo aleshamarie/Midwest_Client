@@ -193,6 +193,87 @@
           </div>
         </div>
       </div>
+
+      <!-- SALES ANALYTICS & COMPARISON -->
+      <div class="mt-4 bg-white p-4 rounded shadow">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-semibold text-lg">Sales Analytics & Comparison</h3>
+          <span id="analyticsDateLabel" class="text-xs text-gray-500"></span>
+        </div>
+        
+        <!-- Key Performance Indicators -->
+        <div class="grid grid-cols-4 gap-4 mb-6">
+          <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs text-gray-600 mb-1">Net Sales Performance</p>
+                <p class="text-2xl font-bold text-blue-700" id="analyticsNetSales">₱0.00</p>
+                <p class="text-xs mt-1" id="analyticsNetSalesChange"></p>
+              </div>
+              <div class="text-3xl">📈</div>
+            </div>
+          </div>
+          
+          <div class="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs text-gray-600 mb-1">Profit Performance</p>
+                <p class="text-2xl font-bold text-green-700" id="analyticsProfit">₱0.00</p>
+                <p class="text-xs mt-1" id="analyticsProfitChange"></p>
+              </div>
+              <div class="text-3xl">💰</div>
+            </div>
+          </div>
+          
+          <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs text-gray-600 mb-1">Profit Margin</p>
+                <p class="text-2xl font-bold text-purple-700" id="analyticsMargin">0.00%</p>
+                <p class="text-xs mt-1" id="analyticsMarginChange"></p>
+              </div>
+              <div class="text-3xl">📊</div>
+            </div>
+          </div>
+          
+          <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
+            <div class="flex items-center justify-between">
+              <div>
+                <p class="text-xs text-gray-600 mb-1">Efficiency Score</p>
+                <p class="text-2xl font-bold text-orange-700" id="analyticsEfficiency">0%</p>
+                <p class="text-xs mt-1 text-gray-600">vs Today</p>
+              </div>
+              <div class="text-3xl">⚡</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparison Chart -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="font-semibold mb-3 text-sm">Sales Comparison</h4>
+            <canvas id="comparisonChart" height="200"></canvas>
+          </div>
+          
+          <div class="bg-gray-50 p-4 rounded-lg">
+            <h4 class="font-semibold mb-3 text-sm">Performance Breakdown</h4>
+            <div class="space-y-3" id="performanceBreakdown">
+              <!-- Will be populated by JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Insights & Recommendations -->
+        <div class="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-200">
+          <h4 class="font-semibold mb-3 text-sm flex items-center">
+            <span class="mr-2">💡</span>
+            Insights & Analysis
+          </h4>
+          <div id="analyticsInsights" class="space-y-2 text-sm text-gray-700">
+            <!-- Will be populated by JavaScript -->
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- INVENTORY -->
