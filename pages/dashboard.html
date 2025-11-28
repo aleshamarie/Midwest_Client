@@ -6,6 +6,7 @@
   <title>Inventory & Orders Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
   <link rel="stylesheet" href="../assets/css/Dashboard/style.css">
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -214,48 +215,51 @@
 
       <div class="bg-white p-4 rounded shadow">
         <!-- Key Performance Indicators -->
-        <div class="grid grid-cols-4 gap-4 mb-6">
-          <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-xs text-gray-600 mb-1">Net Sales Performance</p>
-                <p class="text-2xl font-bold text-blue-700" id="analyticsNetSales">₱0.00</p>
-                <p class="text-xs mt-1" id="analyticsNetSalesChange"></p>
-              </div>
-              <div class="text-3xl">📈</div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-gray-500">Net Sales Performance</p>
+              <p class="text-2xl font-bold text-gray-900" id="analyticsNetSales">₱0.00</p>
+              <p class="text-xs text-gray-500 mt-1" id="analyticsNetSalesChange"></p>
+            </div>
+            <div class="h-10 w-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-xl font-semibold">
+              ₱
             </div>
           </div>
-          
-          <div class="bg-gradient-to-br from-green-50 to-green-100 p-4 rounded-lg border border-green-200">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-xs text-gray-600 mb-1">Profit Performance</p>
-                <p class="text-2xl font-bold text-green-700" id="analyticsProfit">₱0.00</p>
-                <p class="text-xs mt-1" id="analyticsProfitChange"></p>
-              </div>
-              <div class="text-3xl">💰</div>
+
+          <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-gray-500">Profit Performance</p>
+              <p class="text-2xl font-bold text-gray-900" id="analyticsProfit">₱0.00</p>
+              <p class="text-xs text-gray-500 mt-1" id="analyticsProfitChange"></p>
+            </div>
+            <div class="h-10 w-10 rounded-full bg-green-50 text-green-600 flex items-center justify-center text-xl">
+              🛒
             </div>
           </div>
-          
-          <div class="bg-gradient-to-br from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-xs text-gray-600 mb-1">Profit Margin</p>
-                <p class="text-2xl font-bold text-purple-700" id="analyticsMargin">0.00%</p>
-                <p class="text-xs mt-1" id="analyticsMarginChange"></p>
-              </div>
-              <div class="text-3xl">📊</div>
+
+          <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-gray-500">Profit Margin</p>
+              <p class="text-2xl font-bold text-gray-900" id="analyticsMargin">0.00%</p>
+              <p class="text-xs text-gray-500 mt-1" id="analyticsMarginChange"></p>
+            </div>
+            <div class="h-10 w-10 rounded-full bg-purple-50 text-purple-600 flex items-center justify-center text-xl">
+              👥
             </div>
           </div>
-          
-          <div class="bg-gradient-to-br from-orange-50 to-orange-100 p-4 rounded-lg border border-orange-200">
-            <div class="flex items-center justify-between">
-              <div>
-                <p class="text-xs text-gray-600 mb-1">Efficiency Score</p>
-                <p class="text-2xl font-bold text-orange-700" id="analyticsEfficiency">0%</p>
-                <p class="text-xs mt-1 text-gray-600">vs Today</p>
-              </div>
-              <div class="text-3xl">⚡</div>
+
+          <div class="bg-white border border-gray-200 rounded-xl p-4 shadow-sm flex items-start justify-between">
+            <div>
+              <p class="text-xs font-medium text-gray-500">Efficiency Score</p>
+              <p class="text-2xl font-bold text-gray-900" id="analyticsEfficiency">0%</p>
+              <p class="text-xs text-gray-500 mt-1">vs Today</p>
+              <button type="button" onclick="showSection('inventorySection')" class="text-sm text-blue-600 hover:text-blue-800 font-medium mt-2">
+                View inventory
+              </button>
+            </div>
+            <div class="h-10 w-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center text-xl">
+              ⚠️
             </div>
           </div>
         </div>
@@ -298,6 +302,35 @@
             <button onclick="showSection('suppliersSection')" class="bg-indigo-600 text-white px-4 py-1 rounded">Suppliers</button>
             <button onclick="exportInventoryCSV()" class="bg-gray-700 text-white px-4 py-1 rounded" title="Download CSV/Excel">Download CSV</button>
             <button onclick="exportInventoryPDF()" class="bg-gray-700 text-white px-4 py-1 rounded" title="Download PDF">Download PDF</button>
+          </div>
+        </div>
+
+        <!-- In-Store Sales Scanner -->
+        <div id="scannerWrapper" class="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
+          <h3 class="text-xl font-semibold text-center mb-2">In-Store Sales</h3>
+          <p id="scannerInventoryCount" class="text-center text-sm text-gray-600 mb-4"></p>
+
+          <div id="barcodeInputContainer" class="text-center mb-5">
+            <input type="text" id="scannerBarcodeInput" placeholder="Scan or type barcode" autofocus
+                   class="border px-4 py-2 rounded w-60 text-center shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+          </div>
+
+          <div class="overflow-x-auto mb-6">
+            <table id="scannerProductTable" class="min-w-full border-collapse">
+              <thead>
+                <tr>
+                  <th>Product Name</th>
+                  <th>Barcode Number</th>
+                  <th>Quantity</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div id="barcodeContainer" class="flex flex-col items-center">
+            <svg id="scannerBarcode"></svg>
+            <p id="scannerProductName" class="text-lg mt-3 text-gray-800"></p>
           </div>
         </div>
         <div id="inventoryControls" class="flex items-center justify-between mb-3">
@@ -473,6 +506,9 @@
 
           <label class="block text-sm text-gray-600 mb-1" for="prodCategory">Category</label>
           <input type="text" id="prodCategory" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Candies">
+
+          <label class="block text-sm text-gray-600 mb-1" for="prodBarcode">Barcode</label>
+          <input type="text" id="prodBarcode" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., 9556184500023">
 
           <label class="block text-sm text-gray-600 mb-1" for="prodDescription">Description</label>
           <textarea id="prodDescription" rows="3" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Fresh, sweet, and delicious candy perfect for any occasion"></textarea>

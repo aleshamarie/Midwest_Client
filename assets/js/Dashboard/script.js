@@ -24,6 +24,7 @@ let restockProductIndex = null;
 let restockProductIdDirect = null; // when opening modal from server-side table by product id
 let restockProductNameDirect = null; // keep product name for direct flow
 let orderItems = []; // Store order items for the current order being created/edited
+let scannerInventory = [];
 
 // DataTables instances
 let inventoryDT = null;
@@ -330,10 +331,126 @@ function renderInventory() {
     
     // Setup infinite scroll
     setupInfiniteScroll();
+    loadScannerInventory();
   } else {
     console.log('DataTable already exists, refreshing...');
     inventoryDT.ajax.reload();
+    loadScannerInventory();
   }
+}
+
+async function loadScannerInventory() {
+  try {
+    const list = await fetchAllProducts();
+    scannerInventory = (list || [])
+      .filter(item => item && item.barcode)
+      .map(item => ({
+        id: item.id,
+        name: item.name,
+        barcode: item.barcode,
+        quantity: Number(item.stock || 0)
+      }));
+    renderScannerInventoryTable();
+  } catch (error) {
+    console.error('Failed to load scanner inventory:', error);
+    const counter = document.getElementById('scannerInventoryCount');
+    if (counter) counter.textContent = 'Unable to load inventory for scanner.';
+  }
+}
+
+function renderScannerInventoryTable() {
+  const tbody = document.querySelector('#scannerProductTable tbody');
+  if (!tbody) return;
+
+  if (!scannerInventory.length) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-3">No products with barcodes found.</td></tr>';
+  } else {
+    tbody.innerHTML = scannerInventory.map(product => `
+      <tr>
+        <td>${product.name}</td>
+        <td>${product.barcode}</td>
+        <td>${Math.max(0, product.quantity)}</td>
+      </tr>
+    `).join('');
+  }
+
+  const counter = document.getElementById('scannerInventoryCount');
+  if (counter) {
+    counter.textContent = `Products in inventory: ${scannerInventory.length}`;
+  }
+}
+
+function updateScannerInventoryEntry(product) {
+  if (!product || !product.barcode) return;
+  const normalizedBarcode = product.barcode;
+  const entryIndex = scannerInventory.findIndex(p =>
+    p.id === product.id || p.barcode === normalizedBarcode
+  );
+
+  if (entryIndex >= 0) {
+    scannerInventory[entryIndex].quantity = Number(product.stock || 0);
+    if (scannerInventory[entryIndex].quantity <= 0) {
+      scannerInventory.splice(entryIndex, 1);
+    }
+  } else {
+    scannerInventory.push({
+      id: product.id,
+      name: product.name,
+      barcode: normalizedBarcode,
+      quantity: Number(product.stock || 0)
+    });
+  }
+
+  renderScannerInventoryTable();
+}
+
+async function handleBarcodeScan(barcodeValue) {
+  if (!barcodeValue) return;
+  try {
+    const result = await apiFetch('/products/scan', {
+      method: 'POST',
+      body: JSON.stringify({ barcode: barcodeValue })
+    });
+    const scannedProduct = result.product;
+
+    if (window.JsBarcode && scannedProduct.barcode) {
+      JsBarcode('#scannerBarcode', scannedProduct.barcode, {
+        format: 'EAN13',
+        width: 2,
+        height: 60,
+        displayValue: true
+      });
+    }
+
+    const nameEl = document.getElementById('scannerProductName');
+    if (nameEl) {
+      nameEl.textContent = `${scannedProduct.name} • Remaining: ${Math.max(0, scannedProduct.stock || 0)}`;
+    }
+
+    updateScannerInventoryEntry(scannedProduct);
+  } catch (error) {
+    console.error('Barcode scan failed:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Scan failed',
+      text: error.message || 'Unable to process barcode.'
+    });
+  }
+}
+
+function setupScannerInputListener() {
+  const input = document.getElementById('scannerBarcodeInput');
+  if (!input) return;
+
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      const value = event.target.value.trim();
+      if (value) {
+        handleBarcodeScan(value);
+        event.target.value = '';
+      }
+    }
+  });
 }
 
 // Export inventory to CSV (Excel friendly)
@@ -386,6 +503,7 @@ async function editProductFromTable(productId) {
     document.getElementById('productModalTitle').innerText = "Edit Product";
     document.getElementById('prodName').value = product.name;
     document.getElementById('prodCategory').value = product.category;
+    document.getElementById('prodBarcode').value = product.barcode || '';
     document.getElementById('prodDescription').value = product.description || '';
     document.getElementById('prodPrice').value = product.price;
     document.getElementById('prodStock').value = product.stock;
@@ -547,6 +665,7 @@ function openAddProductModal() {
   document.getElementById('productModalTitle').innerText = "Add Product";
   document.getElementById('prodName').value = '';
   document.getElementById('prodCategory').value = '';
+  document.getElementById('prodBarcode').value = '';
   document.getElementById('prodDescription').value = '';
   document.getElementById('prodPrice').value = '';
   document.getElementById('prodStock').value = '';
@@ -573,6 +692,7 @@ function editProduct(i) {
   document.getElementById('productModalTitle').innerText = "Edit Product";
   document.getElementById('prodName').value = p.name;
   document.getElementById('prodCategory').value = p.category;
+  document.getElementById('prodBarcode').value = p.barcode || '';
   document.getElementById('prodDescription').value = p.description || '';
   document.getElementById('prodPrice').value = p.price;
   document.getElementById('prodStock').value = p.stock;
@@ -590,6 +710,7 @@ function editProduct(i) {
 async function saveProduct() {
   const name = document.getElementById('prodName').value.trim();
   const category = document.getElementById('prodCategory').value.trim();
+  const barcode = document.getElementById('prodBarcode').value.trim();
   const description = document.getElementById('prodDescription').value.trim();
   const price = parseFloat(document.getElementById('prodPrice').value) || 0;
   const stock = parseInt(document.getElementById('prodStock').value) || 0;
@@ -605,7 +726,7 @@ async function saveProduct() {
     try {
       const res = await apiFetch(`/products/${productId}`, { 
         method: 'PATCH', 
-        body: JSON.stringify({ name, category, description, price, stock }) 
+        body: JSON.stringify({ name, category, description, price, stock, barcode: barcode || null }) 
       });
       
       // Handle image upload if new image selected
@@ -631,7 +752,7 @@ async function saveProduct() {
       // Create product via API
       const res = await apiFetch('/products', { 
         method: 'POST', 
-        body: JSON.stringify({ name, category, description, price, stock }) 
+        body: JSON.stringify({ name, category, description, price, stock, barcode: barcode || null }) 
       });
       
       const newProduct = res.product;
@@ -2791,10 +2912,12 @@ async function saveToBackend() {
 
 async function init() {
   await loadFromBackend();
+  await loadScannerInventory();
   updateDashboard();
   renderInventory();
   renderSuppliers();
   renderOrders();
+  setupScannerInputListener();
 
   // Periodically refresh orders so mobile updates (e.g., payment refs) appear
   setInterval(async () => {
@@ -2835,6 +2958,7 @@ async function refreshInventoryOnly() {
     sku: p.sku,
     name: p.name,
     category: p.category,
+    barcode: p.barcode || '',
     price: Number(p.price || 0),
     stock: Number(p.stock || 0),
     lowStockThreshold: Number(p.low_stock_threshold || 5),

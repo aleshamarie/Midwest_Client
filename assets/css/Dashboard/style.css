@@ -112,3 +112,42 @@ table.dataTable tbody tr:nth-child(even) {
  #inventoryTable.excel-like td.num, #inventoryTable.excel-like th.num { text-align: right; }
  /* DataTables length/search wrappers inside inventory */
  #inventorySection .dataTables_length select { border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; }
+
+/* Scanner section */
+#scannerWrapper table {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  border-collapse: collapse;
+}
+#scannerWrapper th,
+#scannerWrapper td {
+  border: 1px solid #d4d4d8;
+  padding: 8px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+#scannerWrapper tr:hover td {
+  background-color: #f0f0f0;
+}
+#scannerBarcodeInput {
+  padding: 8px;
+  font-size: 16px;
+  width: 200px;
+  text-align: center;
+}
+@media (max-width: 640px) {
+  #scannerWrapper th,
+  #scannerWrapper td {
+    padding: 6px;
+    font-size: 0.85rem;
+  }
+  #scannerBarcodeInput {
+    width: 150px;
+    font-size: 14px;
+  }
+  #scannerBarcode {
+    width: 90% !important;
+    height: auto !important;
+  }
+}
