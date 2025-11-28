@@ -24,7 +24,7 @@ let restockProductIndex = null;
 let restockProductIdDirect = null; // when opening modal from server-side table by product id
 let restockProductNameDirect = null; // keep product name for direct flow
 let orderItems = []; // Store order items for the current order being created/edited
-let scannerInventory = [];
+let lastScannedProduct = null;
 
 // DataTables instances
 let inventoryDT = null;
@@ -331,77 +331,34 @@ function renderInventory() {
     
     // Setup infinite scroll
     setupInfiniteScroll();
-    loadScannerInventory();
   } else {
     console.log('DataTable already exists, refreshing...');
     inventoryDT.ajax.reload();
-    loadScannerInventory();
   }
 }
 
-async function loadScannerInventory() {
-  try {
-    const list = await fetchAllProducts();
-    scannerInventory = (list || [])
-      .filter(item => item && item.barcode)
-      .map(item => ({
-        id: item.id,
-        name: item.name,
-        barcode: item.barcode,
-        quantity: Number(item.stock || 0)
-      }));
-    renderScannerInventoryTable();
-  } catch (error) {
-    console.error('Failed to load scanner inventory:', error);
-    const counter = document.getElementById('scannerInventoryCount');
-    if (counter) counter.textContent = 'Unable to load inventory for scanner.';
-  }
-}
-
-function renderScannerInventoryTable() {
+function renderLastScannedProduct() {
   const tbody = document.querySelector('#scannerProductTable tbody');
   if (!tbody) return;
 
-  if (!scannerInventory.length) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-3">No products with barcodes found.</td></tr>';
+  if (!lastScannedProduct) {
+    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-3">Scan a product to display it here.</td></tr>';
   } else {
-    tbody.innerHTML = scannerInventory.map(product => `
+    const product = lastScannedProduct;
+    tbody.innerHTML = `
       <tr>
         <td>${product.name}</td>
-        <td>${product.barcode}</td>
+        <td>${product.barcode || '—'}</td>
         <td>${Math.max(0, product.quantity)}</td>
-      </tr>
-    `).join('');
+      </tr>`;
   }
 
   const counter = document.getElementById('scannerInventoryCount');
   if (counter) {
-    counter.textContent = `Products in inventory: ${scannerInventory.length}`;
+    counter.textContent = lastScannedProduct
+      ? `Last scan updated ${new Date().toLocaleTimeString()}`
+      : 'Awaiting scan...';
   }
-}
-
-function updateScannerInventoryEntry(product) {
-  if (!product || !product.barcode) return;
-  const normalizedBarcode = product.barcode;
-  const entryIndex = scannerInventory.findIndex(p =>
-    p.id === product.id || p.barcode === normalizedBarcode
-  );
-
-  if (entryIndex >= 0) {
-    scannerInventory[entryIndex].quantity = Number(product.stock || 0);
-    if (scannerInventory[entryIndex].quantity <= 0) {
-      scannerInventory.splice(entryIndex, 1);
-    }
-  } else {
-    scannerInventory.push({
-      id: product.id,
-      name: product.name,
-      barcode: normalizedBarcode,
-      quantity: Number(product.stock || 0)
-    });
-  }
-
-  renderScannerInventoryTable();
 }
 
 async function handleBarcodeScan(barcodeValue) {
@@ -427,7 +384,13 @@ async function handleBarcodeScan(barcodeValue) {
       nameEl.textContent = `${scannedProduct.name} • Remaining: ${Math.max(0, scannedProduct.stock || 0)}`;
     }
 
-    updateScannerInventoryEntry(scannedProduct);
+    lastScannedProduct = {
+      id: scannedProduct.id,
+      name: scannedProduct.name,
+      barcode: scannedProduct.barcode || '',
+      quantity: Math.max(0, scannedProduct.stock || 0)
+    };
+    renderLastScannedProduct();
   } catch (error) {
     console.error('Barcode scan failed:', error);
     Swal.fire({
@@ -2912,12 +2875,12 @@ async function saveToBackend() {
 
 async function init() {
   await loadFromBackend();
-  await loadScannerInventory();
   updateDashboard();
   renderInventory();
   renderSuppliers();
   renderOrders();
   setupScannerInputListener();
+  renderLastScannedProduct();
 
   // Periodically refresh orders so mobile updates (e.g., payment refs) appear
   setInterval(async () => {
