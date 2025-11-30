@@ -1144,25 +1144,26 @@ function getVariantsData() {
     const variantId = div.id.replace('variant_', '');
     const isNewVariant = !variantId.startsWith('variant_') && variantId !== '';
     
-    if (price !== 0 || stock !== 0 || barcodes.length > 0) {
-      const variantData = {
-        name,
-        sku,
-        cost,
-        price,
-        stock,
-        barcodes,
-        image_url: imageUrl,
-        image_public_id: imagePublicId
-      };
-      
-      // Include _id if editing existing variant
-      if (!isNewVariant && variantId && !variantId.startsWith('variant_')) {
-        variantData._id = variantId;
-      }
-      
-      variants.push(variantData);
+    // Always include variants that are in the container (user has added them)
+    // Barcodes are optional - send empty array if no barcodes entered
+    // Backend will validate required fields (price, stock)
+    const variantData = {
+      name,
+      sku,
+      cost,
+      price,
+      stock,
+      barcodes: barcodes.length > 0 ? barcodes : [], // Send empty array if no barcodes
+      image_url: imageUrl,
+      image_public_id: imagePublicId
+    };
+    
+    // Include _id if editing existing variant
+    if (!isNewVariant && variantId && !variantId.startsWith('variant_')) {
+      variantData._id = variantId;
     }
+    
+    variants.push(variantData);
   });
   
   return variants.length > 0 ? variants : null;
