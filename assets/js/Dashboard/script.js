@@ -1870,6 +1870,44 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // --------------------------- DATE FORMATTING ---------------------------
+// Helper function to format date as "January 1, 2025       Saturday       HH:MM:SS AM/PM"
+function formatDateWithDay(date) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 
+                  'July', 'August', 'September', 'October', 'November', 'December'];
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  
+  // Convert to Manila timezone (Asia/Manila, UTC+8)
+  const dateObj = new Date(date);
+  
+  // Use Intl.DateTimeFormat to get proper timezone conversion
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true,
+    weekday: 'long'
+  });
+  
+  const parts = formatter.formatToParts(dateObj);
+  const year = parts.find(p => p.type === 'year').value;
+  const monthNum = parseInt(parts.find(p => p.type === 'month').value) - 1;
+  const day = parts.find(p => p.type === 'day').value;
+  const dayOfWeek = parts.find(p => p.type === 'weekday').value;
+  const hour = parts.find(p => p.type === 'hour').value;
+  const minute = parts.find(p => p.type === 'minute').value;
+  const second = parts.find(p => p.type === 'second').value;
+  const dayPeriod = parts.find(p => p.type === 'dayPeriod').value.toUpperCase();
+  
+  const month = months[monthNum];
+  const time = `${String(hour).padStart(2, '0')}:${minute}:${second} ${dayPeriod}`;
+  
+  return `${month} ${day}, ${year}       ${dayOfWeek}       ${time}`;
+}
+
 // Cache bust: 2025-01-19 - Fixed timezone issue
 function formatOrderDate(dateString) {
   try {
@@ -3768,7 +3806,27 @@ function ruleBasedForecast(values, k) {
 }
 
 // --------------------------- INIT ---------------------------
-document.getElementById('currentDate').textContent = new Date().toLocaleDateString();
+// Initialize current date display and start updating time every second
+// Wait for DOM to be ready before starting the interval
+function initializeDateDisplay() {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      startDateUpdateInterval();
+    });
+  } else {
+    // DOM is already ready
+    startDateUpdateInterval();
+  }
+  
+  // Restart interval when window gains focus (in case it was paused)
+  window.addEventListener('focus', () => {
+    if (!dateUpdateInterval) {
+      startDateUpdateInterval();
+    }
+  });
+}
+
+initializeDateDisplay();
 // Set user/admin name from stored authUser
 try {
   const u = JSON.parse(localStorage.getItem('authUser') || '{}');
@@ -4032,16 +4090,47 @@ setTimeout(() => {
 }, 500);
 
 // --------------------------- DATE FILTER UI HANDLERS ---------------------------
+// Function to update the current date/time display
+// Always shows today's date and current time in Manila timezone, regardless of date filter
+function updateCurrentDateDisplay() {
+  const currentDateEl = document.getElementById('currentDate');
+  if (!currentDateEl) return;
+  
+  // Always show today's date and current time in Manila timezone
+  currentDateEl.textContent = formatDateWithDay(new Date());
+}
+
+// Set up interval to update time every second
+let dateUpdateInterval = null;
+
+function startDateUpdateInterval() {
+  // Clear existing interval if any
+  if (dateUpdateInterval) {
+    clearInterval(dateUpdateInterval);
+    dateUpdateInterval = null;
+  }
+  
+  // Check if the element exists before starting
+  const currentDateEl = document.getElementById('currentDate');
+  if (!currentDateEl) {
+    console.warn('currentDate element not found, retrying in 100ms...');
+    setTimeout(startDateUpdateInterval, 100);
+    return;
+  }
+  
+  // Update immediately
+  updateCurrentDateDisplay();
+  // Then update every second
+  dateUpdateInterval = setInterval(() => {
+    updateCurrentDateDisplay();
+  }, 1000);
+  console.log('Date update interval started');
+}
+
 function onDateFilterChange(value) {
   activeDateFilter = value || null;
-  // Update the header date label to reflect filter or today
-  if (activeDateFilter) {
-    const [y, m, d] = activeDateFilter.split('-').map(Number);
-    const display = new Date(y, m - 1, d).toLocaleDateString();
-    document.getElementById('currentDate').textContent = display + ' (filtered)';
-  } else {
-    document.getElementById('currentDate').textContent = new Date().toLocaleDateString();
-  }
+  // Note: updateCurrentDateDisplay() is not needed here since the interval handles it
+  // The time display always shows today's date/time, independent of the filter
   renderOrders();
   updateDashboard();
   // Also load daily sales summary and orders-by-date table
