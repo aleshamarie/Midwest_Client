@@ -322,10 +322,24 @@
                   <th>Product Name</th>
                   <th>Barcode Number</th>
                   <th>Quantity</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
+          </div>
+
+          <div class="flex justify-center gap-4 mb-4">
+            <button id="processSaleBtn" 
+                    class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    disabled>
+              Process Sale
+            </button>
+            <button id="clearScannedBtn" 
+                    class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    disabled>
+              Clear All
+            </button>
           </div>
 
           <div id="barcodeContainer" class="flex flex-col items-center">
@@ -494,56 +508,84 @@
     </section>
 
     <!-- PRODUCT MODAL -->
-    <div id="productModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-      <div class="bg-white w-[500px] rounded-lg shadow-lg">
+    <div id="productModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 overflow-y-auto">
+      <div class="bg-white w-[900px] max-w-[95vw] rounded-lg shadow-lg my-8">
         <div class="px-6 py-4 border-b flex items-center gap-3">
           <div class="w-9 h-9 flex items-center justify-center rounded-full bg-green-100 text-green-700">📦</div>
           <h2 id="productModalTitle" class="text-lg font-semibold">Add Product</h2>
         </div>
         <div class="px-6 pt-4 pb-2">
-          <label class="block text-sm text-gray-600 mb-1" for="prodName">Product Name</label>
-          <input type="text" id="prodName" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., 1 Peso Candy">
+          <div class="grid grid-cols-2 gap-6">
+            <!-- Left Column: Product Info -->
+            <div class="space-y-3">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">Product Info</h3>
+              
+              <div>
+                <label class="block text-sm text-gray-600 mb-1" for="prodName">Product Name</label>
+                <input type="text" id="prodName" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., 1 Peso Candy">
+              </div>
 
-          <label class="block text-sm text-gray-600 mb-1" for="prodCategory">Category</label>
-          <input type="text" id="prodCategory" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Candies">
+              <div>
+                <label class="block text-sm text-gray-600 mb-1" for="prodCategory">Category</label>
+                <input type="text" id="prodCategory" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Candies">
+              </div>
 
-          <label class="block text-sm text-gray-600 mb-1" for="prodBarcode">Barcode</label>
-          <input type="text" id="prodBarcode" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., 9556184500023">
+              <div>
+                <label class="block text-sm text-gray-600 mb-1" for="prodBarcode">Barcode</label>
+                <input type="text" id="prodBarcode" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., 9556184500023">
+              </div>
 
-          <label class="block text-sm text-gray-600 mb-1" for="prodDescription">Description</label>
-          <textarea id="prodDescription" rows="3" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Fresh, sweet, and delicious candy perfect for any occasion"></textarea>
+              <div>
+                <label class="block text-sm text-gray-600 mb-1" for="prodDescription">Description</label>
+                <textarea id="prodDescription" rows="3" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="e.g., Fresh, sweet, and delicious candy perfect for any occasion"></textarea>
+              </div>
 
-          <!-- Product Image Section -->
-          <div class="mb-3">
-            <label class="block text-sm text-gray-600 mb-2">Product Image</label>
-            <div id="productImageContainer" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-              <div id="productImagePreview" class="mb-2">
-                <img id="productImagePreviewImg" src="../assets/images/Midwest.jpg" alt="Product preview" class="mx-auto max-h-32 max-w-32 object-contain rounded">
-                <div class="mt-2 space-x-2">
-                  <button type="button" onclick="fetchCurrentProductImage()" class="text-blue-600 text-sm hover:text-blue-800">Fetch Image</button>
-                  <button type="button" onclick="removeProductImage()" class="text-red-600 text-sm hover:text-red-800">Remove Image</button>
+              <!-- Product Image Section -->
+              <div>
+                <label class="block text-sm text-gray-600 mb-2">Product Image</label>
+                <div id="productImageContainer" class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                  <div id="productImagePreview" class="mb-2">
+                    <img id="productImagePreviewImg" src="../assets/images/Midwest.jpg" alt="Product preview" class="mx-auto max-h-32 max-w-32 object-contain rounded">
+                    <div class="mt-2 space-x-2">
+                      <button type="button" onclick="fetchCurrentProductImage()" class="text-blue-600 text-sm hover:text-blue-800">Fetch Image</button>
+                      <button type="button" onclick="removeProductImage()" class="text-red-600 text-sm hover:text-red-800">Remove Image</button>
+                    </div>
+                  </div>
+                  <div id="productImageUpload" class="cursor-pointer hidden">
+                    <div class="text-gray-400 mb-2">📷</div>
+                    <div class="text-sm text-gray-600">Click to upload image</div>
+                    <div class="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP (max 5MB)</div>
+                  </div>
+                  <input type="file" id="productImageInput" accept="image/*" class="hidden" onchange="handleProductImageSelect(event)" aria-label="Product image upload">
                 </div>
               </div>
-              <div id="productImageUpload" class="cursor-pointer hidden">
-                <div class="text-gray-400 mb-2">📷</div>
-                <div class="text-sm text-gray-600">Click to upload image</div>
-                <div class="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP (max 5MB)</div>
-              </div>
-              <input type="file" id="productImageInput" accept="image/*" class="hidden" onchange="handleProductImageSelect(event)" aria-label="Product image upload">
-            </div>
-          </div>
 
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-sm text-gray-600 mb-1" for="prodPrice">Price</label>
-              <div class="flex items-stretch border rounded overflow-hidden focus-within:ring-2 focus-within:ring-green-500">
-                <span class="px-3 py-2 bg-gray-50 text-gray-600 select-none">₱</span>
-                <input type="number" id="prodPrice" step="0.01" class="flex-1 px-3 py-2 outline-none" placeholder="0.00">
+              <!-- Legacy fields (shown when no variants) -->
+              <div id="legacyFields" class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm text-gray-600 mb-1" for="prodPrice">Price</label>
+                  <div class="flex items-stretch border rounded overflow-hidden focus-within:ring-2 focus-within:ring-green-500">
+                    <span class="px-3 py-2 bg-gray-50 text-gray-600 select-none">₱</span>
+                    <input type="number" id="prodPrice" step="0.01" class="flex-1 px-3 py-2 outline-none" placeholder="0.00">
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-sm text-gray-600 mb-1" for="prodStock">Stock</label>
+                  <input type="number" id="prodStock" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0">
+                </div>
               </div>
             </div>
-            <div>
-              <label class="block text-sm text-gray-600 mb-1" for="prodStock">Stock</label>
-              <input type="number" id="prodStock" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" placeholder="0">
+
+            <!-- Right Column: Variants -->
+            <div class="space-y-3 border-l pl-6">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-sm font-semibold text-gray-700">Variants</h3>
+                <button type="button" onclick="addVariant()" class="text-sm px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded">+ Add Variant</button>
+              </div>
+              <div id="variantsContainer" class="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+                <!-- Variants will be dynamically added here -->
+              </div>
+              <div class="text-xs text-gray-500 mt-2">If no variants are added, the product will use the legacy single product mode.</div>
             </div>
           </div>
         </div>
@@ -622,8 +664,27 @@
             </div>
           </div>
 
-          <div class="mt-3">
-            <input type="text" id="orderRef" placeholder="GCash Reference Number" class="border rounded w-full px-3 py-2 hidden focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <div class="mt-3" id="gcashFields">
+            <input type="text" id="orderRef" placeholder="GCash Reference Number" class="border rounded w-full px-3 py-2 hidden focus:outline-none focus:ring-2 focus:ring-blue-500 mb-3">
+            
+            <!-- Payment Proof Image (shown when GCash is selected) -->
+            <div id="paymentProofSection" class="hidden">
+              <label class="block text-sm text-gray-600 mb-1">Proof of Payment</label>
+              <div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                <div id="paymentProofPreview" class="mb-2 hidden">
+                  <img id="paymentProofPreviewImg" src="" alt="Payment proof preview" class="mx-auto max-h-40 max-w-full object-contain rounded">
+                  <div class="mt-2 space-x-2">
+                    <button type="button" onclick="removePaymentProof()" class="text-red-600 text-sm hover:text-red-800">Remove</button>
+                  </div>
+                </div>
+                <div id="paymentProofUpload" class="cursor-pointer">
+                  <div class="text-gray-400 mb-2">📸</div>
+                  <div class="text-sm text-gray-600">Click to upload payment proof</div>
+                  <div class="text-xs text-gray-500 mt-1">JPG, PNG, GIF, WebP (max 5MB)</div>
+                </div>
+                <input type="file" id="paymentProofInput" accept="image/*" class="hidden" onchange="handlePaymentProofSelect(event)" aria-label="Payment proof upload">
+              </div>
+            </div>
           </div>
 
           <!-- Order Items Section -->
@@ -685,6 +746,15 @@
         </div>
         <div class="px-6 pt-4 pb-2">
           <p id="restockProductName" class="mb-3 font-medium text-gray-800"></p>
+
+          <!-- Variant Selection (shown if product has variants) -->
+          <div id="restockVariantSection" class="mb-3 hidden">
+            <label class="block text-sm text-gray-600 mb-1" for="restockVariant">Select Variant</label>
+            <select id="restockVariant" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+              <option value="">-- Select Variant --</option>
+            </select>
+            <p id="restockVariantStock" class="text-xs text-gray-500 mb-2"></p>
+          </div>
 
           <label class="block text-sm text-gray-600 mb-1" for="restockSupplier">Supplier</label>
           <select id="restockSupplier" class="border rounded w-full px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-indigo-500" title="Supplier"></select>
@@ -776,46 +846,87 @@
 
     <!-- ORDER REVIEW MODAL -->
     <div id="orderReviewModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
-      <div class="bg-white w-[480px] rounded-lg shadow-lg">
+      <div class="bg-white w-[900px] max-w-[95vw] rounded-lg shadow-lg flex flex-col max-h-[90vh]">
         <div class="px-6 py-4 border-b flex items-center gap-3">
           <div class="w-9 h-9 flex items-center justify-center rounded-full bg-blue-100 text-blue-700">📝</div>
           <h2 class="text-lg font-semibold">Review Order</h2>
         </div>
-        <div class="px-6 pt-4 pb-2 text-sm text-gray-800">
-          <div class="grid grid-cols-2 gap-x-6 gap-y-2">
-            <div><span class="text-gray-500">Order:</span> <span id="reviewOrderId" class="font-medium"></span></div>
-            <div><span class="text-gray-500">Status:</span> <span id="reviewStatus" class="font-medium"></span></div>
-            <div class="col-span-2"><span class="text-gray-500">Customer:</span> <span id="reviewCustomer" class="font-medium"></span></div>
-            <div><span class="text-gray-500">Payment:</span> <span id="reviewPayment" class="font-medium"></span></div>
-            <div><span class="text-gray-500">Ref:</span> <span id="reviewRef" class="font-medium"></span></div>
-          </div>
-          <hr class="my-3">
-          <div class="mb-3">
-            <h3 class="font-semibold mb-2">Items Ordered</h3>
-            <div class="overflow-x-auto">
-              <table class="min-w-full text-sm text-gray-700">
-                <thead>
-                  <tr class="bg-gray-100">
-                    <th class="px-3 py-2 text-left">Product</th>
-                    <th class="px-3 py-2 text-right">Qty</th>
-                    <th class="px-3 py-2 text-right">Price</th>
-                    <th class="px-3 py-2 text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody id="reviewItems"></tbody>
-              </table>
+        <div class="flex-1 overflow-auto">
+          <div class="flex flex-row">
+            <!-- Left Column: Order Details -->
+            <div class="flex-1 px-6 pt-4 pb-2 text-sm text-gray-800 border-r">
+              <div class="grid grid-cols-2 gap-x-6 gap-y-2">
+                <div><span class="text-gray-500">Order:</span> <span id="reviewOrderId" class="font-medium"></span></div>
+                <div><span class="text-gray-500">Status:</span> <span id="reviewStatus" class="font-medium"></span></div>
+                <div class="col-span-2"><span class="text-gray-500">Customer:</span> <span id="reviewCustomer" class="font-medium"></span></div>
+                <div><span class="text-gray-500">Payment:</span> <span id="reviewPayment" class="font-medium"></span></div>
+                <div><span class="text-gray-500">Ref:</span> <span id="reviewRef" class="font-medium"></span></div>
+              </div>
+              <hr class="my-3">
+              <div class="mb-3">
+                <h3 class="font-semibold mb-2">Items Ordered</h3>
+                <div class="overflow-x-auto">
+                  <table class="min-w-full text-sm text-gray-700">
+                    <thead>
+                      <tr class="bg-gray-100">
+                        <th class="px-3 py-2 text-left">Product</th>
+                        <th class="px-3 py-2 text-right">Qty</th>
+                        <th class="px-3 py-2 text-right">Price</th>
+                        <th class="px-3 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody id="reviewItems"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="space-y-1">
+                <div class="flex justify-between"><span class="text-gray-600">Total:</span> <span class="font-semibold">₱<span id="reviewTotal"></span></span></div>
+                <div class="flex justify-between"><span class="text-gray-600">Discount:</span> <span class="font-semibold">₱<span id="reviewDiscount"></span></span></div>
+                <div class="flex justify-between text-lg"><span class="text-gray-800">Net Total:</span> <span class="font-bold">₱<span id="reviewNetTotal"></span></span></div>
+              </div>
             </div>
-          </div>
-          <div class="space-y-1">
-            <div class="flex justify-between"><span class="text-gray-600">Total:</span> <span class="font-semibold">₱<span id="reviewTotal"></span></span></div>
-            <div class="flex justify-between"><span class="text-gray-600">Discount:</span> <span class="font-semibold">₱<span id="reviewDiscount"></span></span></div>
-            <div class="flex justify-between text-lg"><span class="text-gray-800">Net Total:</span> <span class="font-bold">₱<span id="reviewNetTotal"></span></span></div>
+            
+            <!-- Right Column: Payment Proof -->
+            <div class="w-80 px-6 pt-4 pb-2">
+              <h3 class="font-semibold mb-3 text-sm text-gray-800">Proof of Payment</h3>
+              <div id="reviewPaymentProofSection" class="hidden">
+                <div id="reviewPaymentProof" class="border rounded-lg p-3 bg-gray-50">
+                  <img id="reviewPaymentProofImg" src="" alt="Payment proof" class="w-full h-auto rounded cursor-pointer hover:opacity-80 transition-opacity shadow-sm" onclick="openPaymentProofModal()">
+                  <p class="text-xs text-gray-500 text-center mt-2">Click to view full size</p>
+                </div>
+              </div>
+              <div id="reviewNoPaymentProof" class="border rounded-lg p-8 bg-gray-50 text-center">
+                <div class="text-gray-400 mb-2">
+                  <svg class="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                  </svg>
+                </div>
+                <p class="text-sm text-gray-500">No payment proof uploaded</p>
+              </div>
+            </div>
           </div>
         </div>
         <div class="px-6 py-4 border-t flex justify-end gap-2 bg-gray-50 rounded-b-lg">
           <button onclick="closeOrderReviewModal()" class="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300 text-gray-800">Close</button>
           <button onclick="declineOrderFromModal()" class="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white">Decline</button>
           <button onclick="approveOrderFromModal()" class="px-4 py-2 rounded bg-green-600 hover:bg-green-700 text-white">Approve</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAYMENT PROOF MODAL -->
+    <div id="paymentProofModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex justify-center items-center z-50">
+      <div class="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full m-4 flex flex-col">
+        <div class="px-6 py-4 border-b flex items-center justify-between">
+          <h2 class="text-lg font-semibold">Payment Proof</h2>
+          <button onclick="closePaymentProofModal()" class="text-gray-500 hover:text-gray-700" title="Close">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="flex-1 overflow-auto p-4 flex items-center justify-center bg-gray-100">
+          <img id="paymentProofModalImg" src="" alt="Payment proof" class="max-w-full max-h-full object-contain rounded">
         </div>
       </div>
     </div>

@@ -24,7 +24,7 @@ let restockProductIndex = null;
 let restockProductIdDirect = null; // when opening modal from server-side table by product id
 let restockProductNameDirect = null; // keep product name for direct flow
 let orderItems = []; // Store order items for the current order being created/edited
-let lastScannedProduct = null;
+let scannedProducts = []; // Array to accumulate scanned products for in-store sales
 
 // DataTables instances
 let inventoryDT = null;
@@ -335,36 +335,93 @@ function renderInventory() {
     console.log('DataTable already exists, refreshing...');
     inventoryDT.ajax.reload();
   }
+  
+  // Render scanned products table when inventory section is shown
+  renderScannedProducts();
 }
 
-function renderLastScannedProduct() {
+function renderScannedProducts() {
   const tbody = document.querySelector('#scannerProductTable tbody');
   if (!tbody) return;
 
-  if (!lastScannedProduct) {
-    tbody.innerHTML = '<tr><td colspan="3" class="text-center text-gray-500 py-3">Scan a product to display it here.</td></tr>';
+  const processBtn = document.getElementById('processSaleBtn');
+  const clearBtn = document.getElementById('clearScannedBtn');
+
+  if (scannedProducts.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-3">Scan a product to add it to in-store sales.</td></tr>';
+    if (processBtn) processBtn.disabled = true;
+    if (clearBtn) clearBtn.disabled = true;
   } else {
-    const product = lastScannedProduct;
-    tbody.innerHTML = `
-      <tr>
-        <td>${product.name}</td>
+    tbody.innerHTML = scannedProducts.map((product, index) => `
+      <tr data-index="${index}">
+        <td>${product.name}${product.variantName ? ` (${product.variantName})` : ''}</td>
         <td>${product.barcode || '—'}</td>
-        <td>${Math.max(0, product.quantity)}</td>
-      </tr>`;
+        <td>
+          <input type="number" 
+                 min="1" 
+                 max="${product.currentStock || 9999}" 
+                 value="${product.quantity}" 
+                 class="quantity-input border rounded px-2 py-1 w-20 text-center"
+                 data-index="${index}"
+                 onchange="updateScannedQuantity(${index}, this.value)">
+        </td>
+        <td>
+          <button onclick="removeScannedProduct(${index})" 
+                  class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm">
+            Cancel
+          </button>
+        </td>
+      </tr>
+    `).join('');
+    if (processBtn) processBtn.disabled = false;
+    if (clearBtn) clearBtn.disabled = false;
   }
 
   const counter = document.getElementById('scannerInventoryCount');
   if (counter) {
-    counter.textContent = lastScannedProduct
-      ? `Last scan updated ${new Date().toLocaleTimeString()}`
+    counter.textContent = scannedProducts.length > 0
+      ? `Products in In-Store Sales: ${scannedProducts.length}`
       : 'Awaiting scan...';
   }
+}
+
+function updateScannedQuantity(index, newQuantity) {
+  const qty = parseInt(newQuantity) || 1;
+  if (qty < 1) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Invalid Quantity',
+      text: 'Quantity must be at least 1'
+    });
+    renderScannedProducts();
+    return;
+  }
+  
+  const product = scannedProducts[index];
+  if (product.currentStock && qty > product.currentStock) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'Insufficient Stock',
+      text: `Only ${product.currentStock} available in stock`
+    });
+    scannedProducts[index].quantity = product.currentStock;
+    renderScannedProducts();
+    return;
+  }
+  
+  scannedProducts[index].quantity = qty;
+}
+
+function removeScannedProduct(index) {
+  scannedProducts.splice(index, 1);
+  renderScannedProducts();
 }
 
 async function handleBarcodeScan(barcodeValue) {
   if (!barcodeValue) return;
   try {
-    const result = await apiFetch('/products/scan', {
+    // Use search endpoint instead of scan to avoid decreasing stock
+    const result = await apiFetch('/products/search-barcode', {
       method: 'POST',
       body: JSON.stringify({ barcode: barcodeValue })
     });
@@ -381,16 +438,51 @@ async function handleBarcodeScan(barcodeValue) {
 
     const nameEl = document.getElementById('scannerProductName');
     if (nameEl) {
-      nameEl.textContent = `${scannedProduct.name} • Remaining: ${Math.max(0, scannedProduct.stock || 0)}`;
+      nameEl.textContent = `Product Name: ${scannedProduct.name}${scannedProduct.variant ? ` (${scannedProduct.variant.display_name || scannedProduct.variant.name})` : ''}`;
     }
 
-    lastScannedProduct = {
-      id: scannedProduct.id,
-      name: scannedProduct.name,
-      barcode: scannedProduct.barcode || '',
-      quantity: Math.max(0, scannedProduct.stock || 0)
-    };
-    renderLastScannedProduct();
+    // Create a unique key for variant products
+    const productKey = scannedProduct.variantId 
+      ? `${scannedProduct.id}_${scannedProduct.variantId}`
+      : scannedProduct.id || scannedProduct.barcode;
+
+    // Check if product already exists in scanned products
+    const existingIndex = scannedProducts.findIndex(p => {
+      if (p.variantId && scannedProduct.variantId) {
+        return p.id === scannedProduct.id && p.variantId === scannedProduct.variantId;
+      }
+      return p.id === scannedProduct.id || p.barcode === scannedProduct.barcode;
+    });
+
+    if (existingIndex >= 0) {
+      // Increment quantity if product already scanned
+      const currentQty = scannedProducts[existingIndex].quantity;
+      const maxStock = scannedProducts[existingIndex].currentStock || 9999;
+      if (currentQty < maxStock) {
+        scannedProducts[existingIndex].quantity += 1;
+      } else {
+        Swal.fire({
+          icon: 'warning',
+          title: 'Stock Limit',
+          text: `Only ${maxStock} available in stock`
+        });
+      }
+    } else {
+      // Add new product to scanned list with quantity 1
+      scannedProducts.push({
+        id: scannedProduct.id,
+        name: scannedProduct.name,
+        barcode: scannedProduct.barcode || barcodeValue.trim(),
+        quantity: 1,
+        variantId: scannedProduct.variantId || null,
+        variantName: scannedProduct.variant ? (scannedProduct.variant.display_name || scannedProduct.variant.name) : null,
+        price: scannedProduct.price || scannedProduct.variant?.price || 0,
+        currentStock: scannedProduct.currentStock || scannedProduct.stock || 0,
+        productKey: productKey
+      });
+    }
+
+    renderScannedProducts();
   } catch (error) {
     console.error('Barcode scan failed:', error);
     Swal.fire({
@@ -399,6 +491,200 @@ async function handleBarcodeScan(barcodeValue) {
       text: error.message || 'Unable to process barcode.'
     });
   }
+}
+
+async function processScannedSale() {
+  if (scannedProducts.length === 0) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'No Items',
+      text: 'Please scan at least one product before processing the sale.'
+    });
+    return;
+  }
+
+  // Build summary for confirmation
+  const totalItems = scannedProducts.reduce((sum, p) => sum + p.quantity, 0);
+  const totalValue = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+  
+  const itemsList = scannedProducts.map(p => 
+    `• ${p.name}${p.variantName ? ` (${p.variantName})` : ''} - Qty: ${p.quantity} - ₱${(p.price * p.quantity).toFixed(2)}`
+  ).join('\n');
+
+  const confirmationText = `Confirm Sale:\n\n${itemsList}\n\nTotal Items: ${totalItems}\nTotal Value: ₱${totalValue.toFixed(2)}\n\nThis will decrease stock. Continue?`;
+
+  const result = await Swal.fire({
+    icon: 'question',
+    title: 'Confirm Sale',
+    html: `
+      <div class="text-left">
+        <p class="mb-3 font-semibold">Items to process:</p>
+        <div class="max-h-60 overflow-y-auto mb-4">
+          ${scannedProducts.map(p => `
+            <div class="mb-2 p-2 bg-gray-50 rounded">
+              <strong>${p.name}${p.variantName ? ` (${p.variantName})` : ''}</strong><br>
+              Quantity: ${p.quantity} × ₱${p.price.toFixed(2)} = ₱${(p.price * p.quantity).toFixed(2)}
+            </div>
+          `).join('')}
+        </div>
+        <div class="border-t pt-3">
+          <p><strong>Total Items:</strong> ${totalItems}</p>
+          <p><strong>Total Value:</strong> ₱${totalValue.toFixed(2)}</p>
+        </div>
+        <p class="mt-3 text-red-600 font-semibold">This will decrease stock. Continue?</p>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: 'Yes, Process Sale',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#10b981',
+    cancelButtonColor: '#ef4444'
+  });
+
+  if (!result.isConfirmed) {
+    return;
+  }
+
+  try {
+    // Prepare items for batch processing
+    const items = scannedProducts.map(p => ({
+      barcode: p.barcode,
+      quantity: p.quantity,
+      variantId: p.variantId || undefined
+    }));
+
+    Swal.fire({
+      title: 'Processing...',
+      text: 'Please wait while we process your sale.',
+      allowOutsideClick: false,
+      didOpen: () => {
+        Swal.showLoading();
+      }
+    });
+
+    const batchResult = await apiFetch('/products/batch-scan', {
+      method: 'POST',
+      body: JSON.stringify({ items })
+    });
+
+    if (batchResult.success && batchResult.processed > 0) {
+      // Create an In-Store order to track this sale
+      try {
+        // Prepare order items from scanned products
+        const orderItems = scannedProducts.map(p => ({
+          product_id: p.id, // MongoDB ObjectId from search result
+          product_name: p.name + (p.variantName ? ` (${p.variantName})` : ''),
+          quantity: p.quantity,
+          price: p.price,
+          total_price: p.price * p.quantity,
+          variant_id: p.variantId || null,
+          variant_name: p.variantName || null
+        }));
+
+        const totalPrice = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+        const netTotal = totalPrice; // No discount for in-store sales by default
+
+        // Generate a device ID for in-store sales (use a fixed identifier)
+        const inStoreDeviceId = 'INSTORE-' + new Date().getTime();
+
+        // Create the order
+        await apiFetch('/orders', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: 'In-Store Sale',
+            contact: '',
+            address: '',
+            payment: 'Cash',
+            ref: null,
+            totalPrice: totalPrice,
+            discount: 0,
+            net_total: netTotal,
+            status: 'Completed',
+            type: 'In-Store',
+            device_id: inStoreDeviceId,
+            fcm_token: null,
+            items: orderItems
+          })
+        });
+
+        Swal.fire({
+          icon: 'success',
+          title: 'Sale Processed!',
+          html: `
+            <p>Successfully processed ${batchResult.processed} item(s).</p>
+            <p class="mt-2">Total: ₱${totalPrice.toFixed(2)}</p>
+            <p class="text-sm text-gray-600 mt-2">Order created and recorded in In-Store Sales.</p>
+            ${batchResult.errorCount && batchResult.errorCount > 0 
+              ? `<p class="text-red-600 mt-2">${batchResult.errorCount} error(s) occurred.</p>` 
+              : ''}
+          `,
+          confirmButtonText: 'OK'
+        });
+      } catch (orderError) {
+        console.error('Error creating order:', orderError);
+        // Still show success for stock decrease, but warn about order creation
+        Swal.fire({
+          icon: 'warning',
+          title: 'Stock Updated',
+          html: `
+            <p>Stock has been decreased successfully.</p>
+            <p class="text-red-600 mt-2">Warning: Failed to create order record. ${orderError.message || 'Unknown error'}</p>
+          `,
+          confirmButtonText: 'OK'
+        });
+      }
+
+      // Clear scanned products
+      scannedProducts = [];
+      renderScannedProducts();
+      
+      // Clear barcode display
+      const barcodeEl = document.getElementById('scannerBarcode');
+      if (barcodeEl) barcodeEl.innerHTML = '';
+      const nameEl = document.getElementById('scannerProductName');
+      if (nameEl) nameEl.textContent = '';
+
+      // Refresh inventory and orders
+      await loadFromBackend();
+      updateDashboard();
+      renderInventory();
+      renderOrders();
+    } else {
+      throw new Error('Failed to process some items');
+    }
+  } catch (error) {
+    console.error('Error processing sale:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Processing Failed',
+      text: error.message || 'An error occurred while processing the sale.'
+    });
+  }
+}
+
+function clearScannedProducts() {
+  if (scannedProducts.length === 0) return;
+
+  Swal.fire({
+    icon: 'question',
+    title: 'Clear All Items?',
+    text: 'This will remove all scanned items from the list.',
+    showCancelButton: true,
+    confirmButtonText: 'Yes, Clear All',
+    cancelButtonText: 'Cancel',
+    confirmButtonColor: '#ef4444'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      scannedProducts = [];
+      renderScannedProducts();
+      
+      // Clear barcode display
+      const barcodeEl = document.getElementById('scannerBarcode');
+      if (barcodeEl) barcodeEl.innerHTML = '';
+      const nameEl = document.getElementById('scannerProductName');
+      if (nameEl) nameEl.textContent = '';
+    }
+  });
 }
 
 function setupScannerInputListener() {
@@ -465,11 +751,24 @@ async function editProductFromTable(productId) {
     editProductIndex = null; // We'll handle this differently for server-side
     document.getElementById('productModalTitle').innerText = "Edit Product";
     document.getElementById('prodName').value = product.name;
-    document.getElementById('prodCategory').value = product.category;
+    document.getElementById('prodCategory').value = product.category || '';
     document.getElementById('prodBarcode').value = product.barcode || '';
     document.getElementById('prodDescription').value = product.description || '';
-    document.getElementById('prodPrice').value = product.price;
-    document.getElementById('prodStock').value = product.stock;
+    document.getElementById('prodPrice').value = product.price || '';
+    document.getElementById('prodStock').value = product.stock || '';
+    
+    // Load variants if they exist
+    const variantsContainer = document.getElementById('variantsContainer');
+    if (variantsContainer) {
+      variantsContainer.innerHTML = '';
+      
+      if (product.variants && Array.isArray(product.variants) && product.variants.length > 0) {
+        product.variants.forEach(variant => {
+          addVariant(variant);
+        });
+      }
+      updateLegacyFieldsVisibility();
+    }
     
     // Store the product ID for saving and enable extra actions in modal
     const modal = document.getElementById('productModal');
@@ -536,7 +835,59 @@ async function openRestockModalFromTable(productId) {
     restockProductIndex = null; // use direct id flow
     restockProductIdDirect = product.id || productId;
     restockProductNameDirect = product.name || null;
-    document.getElementById('restockProductName').textContent = `${product.name || ('#' + productId)} (current: ${Number(product.stock || 0)})`;
+    
+    // Update product name display
+    const stockDisplay = product.variants && product.variants.length > 0
+      ? `Total: ${Number(product.stock || 0)}`
+      : `current: ${Number(product.stock || 0)}`;
+    document.getElementById('restockProductName').textContent = `${product.name || ('#' + productId)} (${stockDisplay})`;
+    
+    // Handle variants
+    const variantSection = document.getElementById('restockVariantSection');
+    const variantSelect = document.getElementById('restockVariant');
+    const variantStockInfo = document.getElementById('restockVariantStock');
+    
+    if (product.variants && product.variants.length > 0) {
+      // Show variant selection
+      variantSection.classList.remove('hidden');
+      variantSelect.innerHTML = '<option value="">-- Select Variant --</option>';
+      
+      product.variants.forEach(variant => {
+        const option = document.createElement('option');
+        option.value = variant._id || '';
+        // Construct variant display name
+        let variantName = variant.name || '';
+        if (!variantName) {
+          const parts = [];
+          if (variant.option1_value) parts.push(variant.option1_value);
+          if (variant.option2_value) parts.push(variant.option2_value);
+          if (variant.option3_value) parts.push(variant.option3_value);
+          variantName = parts.length > 0 ? parts.join(' / ') : 'Unnamed Variant';
+        }
+        option.textContent = `${variantName} (Stock: ${variant.stock || 0})`;
+        option.setAttribute('data-stock', variant.stock || 0);
+        variantSelect.appendChild(option);
+      });
+      
+      // Update stock info when variant is selected (remove old listeners first)
+      const newSelect = variantSelect.cloneNode(true);
+      variantSelect.parentNode.replaceChild(newSelect, variantSelect);
+      document.getElementById('restockVariant').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        if (selectedOption.value) {
+          const stock = selectedOption.getAttribute('data-stock') || 0;
+          variantStockInfo.textContent = `Current stock: ${stock}`;
+        } else {
+          variantStockInfo.textContent = '';
+        }
+      });
+    } else {
+      // Hide variant selection for products without variants
+      variantSection.classList.add('hidden');
+      variantSelect.innerHTML = '<option value="">-- Select Variant --</option>';
+      variantStockInfo.textContent = '';
+    }
+    
     document.getElementById('restockQty').value = '';
     document.getElementById('restockDate').value = new Date().toISOString().slice(0,10);
     populateRestockSuppliersSelect();
@@ -621,6 +972,138 @@ async function deleteProductImageFromTable(productId) {
   }
 }
 
+// Variant management functions
+let variantCounter = 0;
+
+function addVariant(variantData = null) {
+  const container = document.getElementById('variantsContainer');
+  const variantId = variantData?._id || `variant_${variantCounter++}`;
+  
+  const variantDiv = document.createElement('div');
+  variantDiv.className = 'border rounded p-3 bg-gray-50';
+  variantDiv.id = `variant_${variantId}`;
+  
+  variantDiv.innerHTML = `
+    <div class="flex justify-between items-center mb-2">
+      <span class="text-sm font-semibold text-gray-700">Variant</span>
+      <button type="button" onclick="removeVariant('${variantId}')" class="text-red-600 hover:text-red-800 text-sm">Remove</button>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Name</label>
+        <input type="text" class="variant-name border rounded w-full px-2 py-1 text-sm" placeholder="e.g., Small" value="${variantData?.name || ''}">
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">SKU</label>
+        <input type="text" class="variant-sku border rounded w-full px-2 py-1 text-sm" placeholder="SKU" value="${variantData?.sku || ''}">
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-2 mb-2">
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Price</label>
+        <input type="number" step="0.01" class="variant-price border rounded w-full px-2 py-1 text-sm" placeholder="0.00" value="${variantData?.price || ''}" required>
+      </div>
+      <div>
+        <label class="block text-xs text-gray-600 mb-1">Stock</label>
+        <input type="number" class="variant-stock border rounded w-full px-2 py-1 text-sm" placeholder="0" value="${variantData?.stock || ''}" required>
+      </div>
+    </div>
+    <div class="mb-2">
+      <label class="block text-xs text-gray-600 mb-1">Barcodes (one per line)</label>
+      <textarea class="variant-barcodes border rounded w-full px-2 py-1 text-sm" rows="2" placeholder="Enter barcodes, one per line">${variantData?.barcodes?.join('\n') || ''}</textarea>
+    </div>
+    <!-- Variant Image Section -->
+    <div class="mb-2">
+      <label class="block text-xs text-gray-600 mb-1">Variant Image</label>
+      <div class="border border-gray-300 rounded p-2">
+        <div id="variant-image-preview-${variantId}" class="mb-2 ${variantData?.image_url ? '' : 'hidden'}">
+          <img id="variant-image-img-${variantId}" src="${variantData?.image_url || '../assets/images/Midwest.jpg'}" alt="Variant preview" class="mx-auto max-h-20 max-w-20 object-contain rounded">
+          <div class="mt-1 space-x-2 text-center">
+            <button type="button" onclick="removeVariantImage('${variantId}')" class="text-red-600 text-xs hover:text-red-800">Remove</button>
+          </div>
+        </div>
+        <div id="variant-image-upload-${variantId}" class="${variantData?.image_url ? 'hidden' : ''}">
+          <input type="file" id="variant-image-input-${variantId}" accept="image/*" class="hidden" onchange="handleVariantImageSelect(event, '${variantId}')">
+          <button type="button" onclick="document.getElementById('variant-image-input-${variantId}').click()" class="text-xs text-blue-600 hover:text-blue-800">📷 Upload Image</button>
+        </div>
+        <input type="hidden" class="variant-image-url" value="${variantData?.image_url || ''}">
+        <input type="hidden" class="variant-image-public-id" value="${variantData?.image_public_id || ''}">
+      </div>
+    </div>
+  `;
+  
+  container.appendChild(variantDiv);
+  updateLegacyFieldsVisibility();
+}
+
+function removeVariant(variantId) {
+  const variantDiv = document.getElementById(`variant_${variantId}`);
+  if (variantDiv) {
+    variantDiv.remove();
+    updateLegacyFieldsVisibility();
+  }
+}
+
+function updateLegacyFieldsVisibility() {
+  const container = document.getElementById('variantsContainer');
+  const legacyFields = document.getElementById('legacyFields');
+  const hasVariants = container && container.children.length > 0;
+  
+  if (legacyFields) {
+    if (hasVariants) {
+      legacyFields.classList.add('hidden');
+    } else {
+      legacyFields.classList.remove('hidden');
+    }
+  }
+}
+
+function getVariantsData() {
+  const container = document.getElementById('variantsContainer');
+  if (!container || container.children.length === 0) {
+    return null;
+  }
+  
+  const variants = [];
+  const variantDivs = container.querySelectorAll('[id^="variant_"]');
+  
+  variantDivs.forEach(div => {
+    const name = div.querySelector('.variant-name')?.value?.trim() || null;
+    const sku = div.querySelector('.variant-sku')?.value?.trim() || null;
+    const price = parseFloat(div.querySelector('.variant-price')?.value) || 0;
+    const stock = parseInt(div.querySelector('.variant-stock')?.value) || 0;
+    const barcodesText = div.querySelector('.variant-barcodes')?.value?.trim() || '';
+    const barcodes = barcodesText.split('\n').map(b => b.trim()).filter(b => b);
+    const imageUrl = div.querySelector('.variant-image-url')?.value?.trim() || null;
+    const imagePublicId = div.querySelector('.variant-image-public-id')?.value?.trim() || null;
+    
+    // Get variant ID if editing
+    const variantId = div.id.replace('variant_', '');
+    const isNewVariant = !variantId.startsWith('variant_') && variantId !== '';
+    
+    if (price !== 0 || stock !== 0 || barcodes.length > 0) {
+      const variantData = {
+        name,
+        sku,
+        price,
+        stock,
+        barcodes,
+        image_url: imageUrl,
+        image_public_id: imagePublicId
+      };
+      
+      // Include _id if editing existing variant
+      if (!isNewVariant && variantId && !variantId.startsWith('variant_')) {
+        variantData._id = variantId;
+      }
+      
+      variants.push(variantData);
+    }
+  });
+  
+  return variants.length > 0 ? variants : null;
+}
+
 // Product modal functions
 function openAddProductModal() {
   console.log('openAddProductModal called');
@@ -632,6 +1115,14 @@ function openAddProductModal() {
   document.getElementById('prodDescription').value = '';
   document.getElementById('prodPrice').value = '';
   document.getElementById('prodStock').value = '';
+  
+  // Clear variants
+  const variantsContainer = document.getElementById('variantsContainer');
+  if (variantsContainer) {
+    variantsContainer.innerHTML = '';
+  }
+  updateLegacyFieldsVisibility();
+  
   resetProductImage();
   const modal = document.getElementById('productModal');
   console.log('Product modal element:', modal);
@@ -649,22 +1140,45 @@ function openAddProductModal() {
   }
 }
 
-function editProduct(i) {
+async function editProduct(i) {
   editProductIndex = i;
   const p = products[i];
   document.getElementById('productModalTitle').innerText = "Edit Product";
   document.getElementById('prodName').value = p.name;
-  document.getElementById('prodCategory').value = p.category;
+  document.getElementById('prodCategory').value = p.category || '';
   document.getElementById('prodBarcode').value = p.barcode || '';
   document.getElementById('prodDescription').value = p.description || '';
-  document.getElementById('prodPrice').value = p.price;
-  document.getElementById('prodStock').value = p.stock;
+  document.getElementById('prodPrice').value = p.price || '';
+  document.getElementById('prodStock').value = p.stock || '';
+  
+  // Load variants if they exist
+  const variantsContainer = document.getElementById('variantsContainer');
+  if (variantsContainer) {
+    variantsContainer.innerHTML = '';
+    
+    if (p.variants && Array.isArray(p.variants) && p.variants.length > 0) {
+      p.variants.forEach(variant => {
+        addVariant(variant);
+      });
+    }
+    updateLegacyFieldsVisibility();
+  }
   
   // Load existing image if available
   if (p.image_url) {
     showProductImagePreview(p.image_url);
   } else {
     resetProductImage();
+  }
+  
+  // Set product ID for update
+  const modal = document.getElementById('productModal');
+  if (modal && p.id) {
+    modal.setAttribute('data-product-id', p.id);
+    const receiveBtn = document.getElementById('editReceiveBtn');
+    const deleteBtn = document.getElementById('editDeleteBtn');
+    if (receiveBtn) receiveBtn.classList.remove('hidden');
+    if (deleteBtn) deleteBtn.classList.remove('hidden');
   }
   
   document.getElementById('productModal').classList.remove('hidden');
@@ -681,6 +1195,25 @@ async function saveProduct() {
 
   if (!name) { Swal.fire({ icon: 'warning', title: 'Product name required' }); return; }
 
+  // Get variants data
+  const variants = getVariantsData();
+  
+  // Prepare product data
+  const productData = {
+    name,
+    category: category || null,
+    description: description || null
+  };
+  
+  if (variants) {
+    productData.variants = variants;
+  } else {
+    // Legacy mode - use single product fields
+    productData.price = price;
+    productData.stock = stock;
+    productData.barcode = barcode || null;
+  }
+
   // Check if we're editing an existing product (server-side)
   const productId = document.getElementById('productModal').getAttribute('data-product-id');
   
@@ -689,7 +1222,7 @@ async function saveProduct() {
     try {
       const res = await apiFetch(`/products/${productId}`, { 
         method: 'PATCH', 
-        body: JSON.stringify({ name, category, description, price, stock, barcode: barcode || null }) 
+        body: JSON.stringify(productData) 
       });
       
       // Handle image upload if new image selected
@@ -702,12 +1235,17 @@ async function saveProduct() {
         }
       }
       
+      // Handle variant image uploads
+      if (variants && res.product && res.product.variants) {
+        await uploadVariantImages(productId, res.product.variants);
+      }
+      
       // Refresh the table
       inventoryDT.ajax.reload();
       Swal.fire({ icon: 'success', title: 'Product updated successfully' });
     } catch (error) {
       console.error('Product update failed:', error);
-      Swal.fire({ icon: 'error', title: 'Failed to update product' });
+      Swal.fire({ icon: 'error', title: 'Failed to update product', text: error.message || 'Unknown error' });
     }
   } else {
     // Adding new product
@@ -715,7 +1253,7 @@ async function saveProduct() {
       // Create product via API
       const res = await apiFetch('/products', { 
         method: 'POST', 
-        body: JSON.stringify({ name, category, description, price, stock, barcode: barcode || null }) 
+        body: JSON.stringify(productData) 
       });
       
       const newProduct = res.product;
@@ -728,6 +1266,11 @@ async function saveProduct() {
           console.error('Image upload failed:', error);
           Swal.fire({ icon: 'warning', title: 'Product saved', text: 'Image upload failed' });
         }
+      }
+      
+      // Handle variant image uploads
+      if (variants && newProduct.variants) {
+        await uploadVariantImages(newProduct.id, newProduct.variants);
       }
       
       // Refresh the table
@@ -874,6 +1417,87 @@ async function fetchCurrentProductImage() {
   }
 }
 
+// Upload variant images
+async function uploadVariantImages(productId, savedVariants) {
+  const container = document.getElementById('variantsContainer');
+  if (!container) return;
+  
+  const variantDivs = container.querySelectorAll('[id^="variant_"]');
+  
+  for (const div of variantDivs) {
+    const variantId = div.id.replace('variant_', '');
+    const imageBlob = div.getAttribute('data-image-blob');
+    
+    if (imageBlob) {
+      try {
+        // Find matching saved variant by name or index
+        const variantName = div.querySelector('.variant-name')?.value?.trim();
+        const variantIndex = Array.from(variantDivs).indexOf(div);
+        const savedVariant = savedVariants.find((v, idx) => 
+          (variantName && v.name === variantName) || idx === variantIndex
+        ) || savedVariants[variantIndex];
+        
+        if (savedVariant && savedVariant._id) {
+          // Convert data URL to blob
+          const response = await fetch(imageBlob);
+          const blob = await response.blob();
+          
+          // Upload variant image
+          await uploadVariantImage(productId, savedVariant._id, blob);
+          
+          // Clear stored image data
+          div.removeAttribute('data-image-blob');
+          div.removeAttribute('data-image-file');
+        }
+      } catch (error) {
+        console.error(`Failed to upload image for variant ${variantId}:`, error);
+      }
+    }
+  }
+}
+
+async function uploadVariantImage(productId, variantId, imageFile) {
+  try {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    
+    const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/${productId}/variants/${variantId}/image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+      },
+      body: formData
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Variant image upload failed: ${response.status} - ${errorText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Variant image upload successful:', result);
+    
+    // Update variant div with new image URL
+    const variantDiv = document.querySelector(`[id^="variant_"][data-variant-id="${variantId}"]`);
+    if (variantDiv && result.variant) {
+      const imageUrlInput = variantDiv.querySelector('.variant-image-url');
+      const imagePublicIdInput = variantDiv.querySelector('.variant-image-public-id');
+      const previewImg = variantDiv.querySelector(`#variant-image-img-${variantDiv.id.replace('variant_', '')}`);
+      
+      if (imageUrlInput) imageUrlInput.value = result.variant.image_url || '';
+      if (imagePublicIdInput) imagePublicIdInput.value = result.variant.image_public_id || '';
+      if (previewImg && result.variant.image_url) {
+        previewImg.src = result.variant.image_url;
+      }
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Variant image upload error:', error);
+    throw error;
+  }
+}
+
 async function uploadProductImage(productId, imageFile) {
   try {
     console.log('Uploading image for product:', productId);
@@ -1002,6 +1626,12 @@ function deleteProduct(i) {
 }
 
 function closeProductModal() {
+  // Clear variants when closing
+  const variantsContainer = document.getElementById('variantsContainer');
+  if (variantsContainer) {
+    variantsContainer.innerHTML = '';
+  }
+  updateLegacyFieldsVisibility();
   console.log('closeProductModal called');
   const modal = document.getElementById('productModal');
   if (modal) {
@@ -1052,6 +1682,83 @@ function showProductImagePreview(imageSrc) {
   
   preview.classList.remove('hidden');
   upload.classList.add('hidden');
+}
+
+// Variant image handling functions
+function handleVariantImageSelect(event, variantId) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    Swal.fire({ icon: 'warning', title: 'Please select an image file' });
+    return;
+  }
+  
+  // Validate file size (5MB limit)
+  const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+  if (file.size > maxSize) {
+    Swal.fire({ 
+      icon: 'warning', 
+      title: 'File too large', 
+      text: `File size must be less than 5MB. Current size: ${Math.round(file.size / 1024 / 1024 * 100) / 100}MB` 
+    });
+    return;
+  }
+  
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    showVariantImagePreview(variantId, e.target.result);
+    // Store file for later upload
+    const variantDiv = document.getElementById(`variant_${variantId}`);
+    if (variantDiv) {
+      variantDiv.setAttribute('data-image-file', JSON.stringify({
+        name: file.name,
+        size: file.size,
+        type: file.type
+      }));
+      variantDiv.setAttribute('data-image-blob', e.target.result);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function showVariantImagePreview(variantId, imageSrc) {
+  const preview = document.getElementById(`variant-image-preview-${variantId}`);
+  const previewImg = document.getElementById(`variant-image-img-${variantId}`);
+  const upload = document.getElementById(`variant-image-upload-${variantId}`);
+  
+  if (preview && previewImg && upload) {
+    previewImg.src = imageSrc;
+    preview.classList.remove('hidden');
+    upload.classList.add('hidden');
+  }
+}
+
+function removeVariantImage(variantId) {
+  const preview = document.getElementById(`variant-image-preview-${variantId}`);
+  const previewImg = document.getElementById(`variant-image-img-${variantId}`);
+  const upload = document.getElementById(`variant-image-upload-${variantId}`);
+  const input = document.getElementById(`variant-image-input-${variantId}`);
+  const variantDiv = document.getElementById(`variant_${variantId}`);
+  
+  if (preview && previewImg && upload && input && variantDiv) {
+    // Reset to default
+    previewImg.src = '../assets/images/Midwest.jpg';
+    preview.classList.add('hidden');
+    upload.classList.remove('hidden');
+    input.value = '';
+    
+    // Clear stored image data
+    variantDiv.removeAttribute('data-image-file');
+    variantDiv.removeAttribute('data-image-blob');
+    
+    // Clear hidden fields
+    const imageUrlInput = variantDiv.querySelector('.variant-image-url');
+    const imagePublicIdInput = variantDiv.querySelector('.variant-image-public-id');
+    if (imageUrlInput) imageUrlInput.value = '';
+    if (imagePublicIdInput) imagePublicIdInput.value = '';
+  }
 }
 
 function removeProductImage() {
@@ -1200,7 +1907,10 @@ function renderOrders() {
   
 
   prioritizedOrders.forEach((o, i) => {
-    const paymentCell = `${o.payment}${o.payment === 'GCash' && o.ref ? `<div class="text-xs text-blue-600">Ref: ${o.ref}</div>` : ''}`;
+    const paymentProofIndicator = o.payment === 'GCash' && o.payment_proof_image_url 
+      ? '<span class="ml-2 text-green-600" title="Payment proof uploaded">✓</span>' 
+      : '';
+    const paymentCell = `${o.payment}${paymentProofIndicator}${o.payment === 'GCash' && o.ref ? `<div class="text-xs text-blue-600">Ref: ${o.ref}</div>` : ''}`;
     const status = (o.status || '').toLowerCase();
     const itemsHtml = Array.isArray(o.items) && o.items.length
       ? `<div class="text-xs text-gray-600 mt-1">${o.items.map(it => `${it.name || ('#'+it.product_id)} × ${it.quantity}`).join(', ')}</div>`
@@ -1382,6 +2092,20 @@ function openOrderReviewModal(i) {
   document.getElementById('reviewTotal').textContent = o.total.toFixed(2);
   document.getElementById('reviewDiscount').textContent = o.discount.toFixed(2);
   document.getElementById('reviewNetTotal').textContent = o.netTotal.toFixed(2);
+  
+  // Show payment proof if available
+  const paymentProofSection = document.getElementById('reviewPaymentProofSection');
+  const noPaymentProof = document.getElementById('reviewNoPaymentProof');
+  const paymentProofImg = document.getElementById('reviewPaymentProofImg');
+  if (o.payment === 'GCash' && o.payment_proof_image_url) {
+    paymentProofSection.classList.remove('hidden');
+    if (noPaymentProof) noPaymentProof.classList.add('hidden');
+    paymentProofImg.src = o.payment_proof_image_url;
+    paymentProofImg.onclick = () => window.open(o.payment_proof_image_url, '_blank');
+  } else {
+    paymentProofSection.classList.add('hidden');
+    if (noPaymentProof) noPaymentProof.classList.remove('hidden');
+  }
   // Fetch fresh order details with items (fallback to existing data)
   (async () => {
     try {
@@ -1458,6 +2182,21 @@ function closeOrderReviewModal() {
   reviewingOrderIndex = null;
 }
 
+function openPaymentProofModal() {
+  const img = document.getElementById('reviewPaymentProofImg');
+  if (img && img.src) {
+    const modalImg = document.getElementById('paymentProofModalImg');
+    if (modalImg) {
+      modalImg.src = img.src;
+      document.getElementById('paymentProofModal').classList.remove('hidden');
+    }
+  }
+}
+
+function closePaymentProofModal() {
+  document.getElementById('paymentProofModal').classList.add('hidden');
+}
+
 async function approveOrderFromModal() {
   if (reviewingOrderIndex === null) return;
   const o = orders[reviewingOrderIndex];
@@ -1504,7 +2243,7 @@ async function completeOrder(orderIndex) {
   } catch (_e) { Swal.fire({ icon: 'error', title: 'Complete order failed' }); }
 }
 
-function saveOrder() {
+async function saveOrder() {
   const customer = document.getElementById('orderCustomer').value.trim();
   const contact = document.getElementById('orderContact').value.trim();
   const address = document.getElementById('orderAddress').value.trim();
@@ -1527,6 +2266,22 @@ function saveOrder() {
 
   if (!customer) { Swal.fire({ icon: 'warning', title: 'Customer name required' }); return; }
 
+  // Upload payment proof if available
+  let paymentProofImageUrl = null;
+  let paymentProofPublicId = null;
+  
+  if (payment === 'GCash' && paymentProofFile) {
+    try {
+      const formData = new FormData();
+      formData.append('image', paymentProofFile);
+      
+      // For new orders, we'll upload after order creation
+      // For now, we'll store the file reference
+    } catch (error) {
+      console.error('Error preparing payment proof:', error);
+    }
+  }
+
   const newOrder = {
     id: 'ORD' + (orders.length + 1),
     customer,
@@ -1539,6 +2294,8 @@ function saveOrder() {
     type,
     payment,
     ref,
+    payment_proof_image_url: paymentProofImageUrl,
+    payment_proof_public_id: paymentProofPublicId,
     items: orderItems.map(item => ({
       product_name: item.product_name,
       quantity: item.quantity,
@@ -1557,7 +2314,38 @@ function saveOrder() {
   }
 
   localStorage.setItem('orders', JSON.stringify(orders));
-  saveToBackend();
+  await saveToBackend();
+  
+  // Upload payment proof after order is created (if it's a new order and has payment proof)
+  if (editOrderIndex === null && payment === 'GCash' && paymentProofFile) {
+    try {
+      const orderId = newOrder.id;
+      const formData = new FormData();
+      formData.append('image', paymentProofFile);
+      
+      const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${orderId}/payment-proof/public`, {
+        method: 'POST',
+        body: formData
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        newOrder.payment_proof_image_url = result.order.payment_proof_image_url;
+        newOrder.payment_proof_public_id = result.order.payment_proof_public_id;
+        // Update in localStorage
+        if (editOrderIndex !== null) {
+          orders[editOrderIndex] = newOrder;
+        } else {
+          orders[orders.length - 1] = newOrder;
+        }
+        localStorage.setItem('orders', JSON.stringify(orders));
+      }
+    } catch (error) {
+      console.error('Error uploading payment proof:', error);
+      // Don't block order creation if payment proof upload fails
+    }
+  }
+  
   closeOrderModal();
   renderOrders();
   updateDashboard();
@@ -1574,6 +2362,8 @@ function deleteOrder(i) {
 }
 
 function closeOrderModal() {
+  // Reset payment proof
+  removePaymentProof();
   console.log('closeOrderModal called');
   orderItems = []; // Reset order items when closing modal
   const modal = document.getElementById('orderModal');
@@ -1803,13 +2593,87 @@ function updateOrderTotal() {
 function toggleRefInput() {
   const payment = document.getElementById('orderPayment').value;
   const refInput = document.getElementById('orderRef');
+  const paymentProofSection = document.getElementById('paymentProofSection');
+  
   if (payment === 'GCash') {
     refInput.classList.remove('hidden');
+    paymentProofSection.classList.remove('hidden');
   } else {
     refInput.classList.add('hidden');
     refInput.value = '';
+    paymentProofSection.classList.add('hidden');
+    // Clear payment proof if switching away from GCash
+    removePaymentProof();
   }
 }
+
+// Payment proof image handling
+let paymentProofImageUrl = null;
+let paymentProofPublicId = null;
+
+function handlePaymentProofSelect(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // Validate file type
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    Swal.fire({ icon: 'error', title: 'Invalid file type', text: 'Please upload a JPG, PNG, GIF, or WebP image' });
+    return;
+  }
+  
+  // Validate file size (5MB)
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    Swal.fire({ icon: 'error', title: 'File too large', text: 'Maximum file size is 5MB' });
+    return;
+  }
+  
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const preview = document.getElementById('paymentProofPreview');
+    const previewImg = document.getElementById('paymentProofPreviewImg');
+    const upload = document.getElementById('paymentProofUpload');
+    
+    previewImg.src = e.target.result;
+    preview.classList.remove('hidden');
+    upload.classList.add('hidden');
+  };
+  reader.readAsDataURL(file);
+  
+  // Store file for upload
+  paymentProofFile = file;
+}
+
+function removePaymentProof() {
+  const preview = document.getElementById('paymentProofPreview');
+  const previewImg = document.getElementById('paymentProofPreviewImg');
+  const upload = document.getElementById('paymentProofUpload');
+  const input = document.getElementById('paymentProofInput');
+  
+  preview.classList.add('hidden');
+  upload.classList.remove('hidden');
+  previewImg.src = '';
+  input.value = '';
+  paymentProofImageUrl = null;
+  paymentProofPublicId = null;
+  paymentProofFile = null;
+}
+
+let paymentProofFile = null;
+
+// Make payment proof upload area clickable
+document.addEventListener('DOMContentLoaded', function() {
+  const paymentProofUpload = document.getElementById('paymentProofUpload');
+  const paymentProofInput = document.getElementById('paymentProofInput');
+  
+  if (paymentProofUpload && paymentProofInput) {
+    paymentProofUpload.addEventListener('click', function() {
+      paymentProofInput.click();
+    });
+  }
+});
 
 // --------------------------- LOW STOCK ITEMS ---------------------------
 async function loadAllLowStockItems() {
@@ -2139,7 +3003,51 @@ function closeSupplierModal() {
 function openRestockModal(productIndex) {
   restockProductIndex = productIndex;
   const p = products[productIndex];
-  document.getElementById('restockProductName').textContent = `${p.name} (current: ${p.stock})`;
+  
+  // Update product name display
+  const stockDisplay = p.variants && p.variants.length > 0
+    ? `Total: ${Number(p.stock || 0)}`
+    : `current: ${Number(p.stock || 0)}`;
+  document.getElementById('restockProductName').textContent = `${p.name} (${stockDisplay})`;
+  
+  // Handle variants
+  const variantSection = document.getElementById('restockVariantSection');
+  const variantSelect = document.getElementById('restockVariant');
+  const variantStockInfo = document.getElementById('restockVariantStock');
+  
+  if (p.variants && p.variants.length > 0) {
+    // Show variant selection
+    variantSection.classList.remove('hidden');
+    variantSelect.innerHTML = '<option value="">-- Select Variant --</option>';
+    
+    p.variants.forEach(variant => {
+      const option = document.createElement('option');
+      option.value = variant._id || '';
+      const variantName = variant.name || 'Unnamed Variant';
+      option.textContent = `${variantName} (Stock: ${variant.stock || 0})`;
+      option.setAttribute('data-stock', variant.stock || 0);
+      variantSelect.appendChild(option);
+    });
+    
+    // Update stock info when variant is selected (remove old listeners first)
+    const newSelect = variantSelect.cloneNode(true);
+    variantSelect.parentNode.replaceChild(newSelect, variantSelect);
+    document.getElementById('restockVariant').addEventListener('change', function() {
+      const selectedOption = this.options[this.selectedIndex];
+      if (selectedOption.value) {
+        const stock = selectedOption.getAttribute('data-stock') || 0;
+        variantStockInfo.textContent = `Current stock: ${stock}`;
+      } else {
+        variantStockInfo.textContent = '';
+      }
+    });
+  } else {
+    // Hide variant selection for products without variants
+    variantSection.classList.add('hidden');
+    variantSelect.innerHTML = '<option value="">-- Select Variant --</option>';
+    variantStockInfo.textContent = '';
+  }
+  
   document.getElementById('restockQty').value = '';
   document.getElementById('restockDate').value = new Date().toISOString().slice(0,10);
   populateRestockSuppliersSelect();
@@ -2160,16 +3068,32 @@ function closeRestockModal() {
   restockProductIndex = null;
   restockProductIdDirect = null;
   restockProductNameDirect = null;
+  
+  // Reset variant selection
+  const variantSection = document.getElementById('restockVariantSection');
+  const variantSelect = document.getElementById('restockVariant');
+  const variantStockInfo = document.getElementById('restockVariantStock');
+  if (variantSection) variantSection.classList.add('hidden');
+  if (variantSelect) variantSelect.innerHTML = '<option value="">-- Select Variant --</option>';
+  if (variantStockInfo) variantStockInfo.textContent = '';
 }
 
 function confirmRestock() {
   const supplierIndex = document.getElementById('restockSupplier').value;
   const qty = parseInt(document.getElementById('restockQty').value) || 0;
   const date = document.getElementById('restockDate').value || new Date().toISOString().slice(0,10);
+  const variantId = document.getElementById('restockVariant').value || null;
 
   if (restockProductIndex === null && restockProductIdDirect === null) { Swal.fire({ icon: 'warning', title: 'Product not selected' }); return; }
   if (!qty || qty <= 0) { Swal.fire({ icon: 'warning', title: 'Enter a valid quantity' }); return; }
   if (supplierIndex === '') { Swal.fire({ icon: 'warning', title: 'Select a supplier' }); return; }
+  
+  // Check if variant is required
+  const variantSection = document.getElementById('restockVariantSection');
+  if (!variantSection.classList.contains('hidden') && !variantId) {
+    Swal.fire({ icon: 'warning', title: 'Please select a variant' }); 
+    return;
+  }
 
   // update product stock (local cache only when using index flow)
   if (restockProductIndex !== null) {
@@ -2185,12 +3109,18 @@ function confirmRestock() {
     suppliers[supplierIndex].items.push(prodName);
   }
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
+  
   // Persist restock in backend: update stock, last_delivery, and link
   try {
     const supplierId = suppliers[supplierIndex].id;
     const productId = restockProductIndex !== null ? products[restockProductIndex].id : restockProductIdDirect;
     if (supplierId && productId) {
-      apiFetch(`/suppliers/${supplierId}/restock`, { method: 'POST', body: JSON.stringify({ productId, qty, date }) })
+      const restockData = { productId, qty, date };
+      if (variantId) {
+        restockData.variantId = variantId;
+      }
+      
+      apiFetch(`/suppliers/${supplierId}/restock`, { method: 'POST', body: JSON.stringify(restockData) })
         .then(() => refreshInventoryOnly())
         .catch((error) => {
           console.error('Restock API error:', error);
@@ -2214,7 +3144,9 @@ function confirmRestock() {
   renderInventory();
   renderSuppliers();
   updateDashboard();
-  Swal.fire({ icon: 'success', title: 'Restocked', text: `${qty} × ${prodName} from ${suppliers[supplierIndex].name}` });
+  
+  const variantName = variantId ? ` (${document.getElementById('restockVariant').options[document.getElementById('restockVariant').selectedIndex].textContent.split(' (')[0]})` : '';
+  Swal.fire({ icon: 'success', title: 'Restocked', text: `${qty} × ${prodName}${variantName} from ${suppliers[supplierIndex].name}` });
 }
 
 // --------------------------- LOW STOCK ALERTS ---------------------------
@@ -2819,7 +3751,23 @@ async function loadFromBackend() {
     // No need to load them here
 
     suppliers = (suppliersRes.suppliers || []).map(s => ({ id: s.id, name: s.name, contact: s.contact, items: s.items || [], lastDelivery: s.last_delivery || null }));
-    orders = (ordersRes.orders || []).map(o => ({ id: o.id, displayId: o.order_code || `ORD${o.id}`, customer: o.name, contact: o.contact, address: o.address, total: Number(o.totalPrice || 0), discount: Number(o.discount || 0), netTotal: Number(o.net_total || 0), status: o.status, type: o.type, payment: o.payment, ref: o.ref, createdAt: o.createdAt }));
+    orders = (ordersRes.orders || []).map(o => ({ 
+      id: o.id, 
+      displayId: o.order_code || `ORD${o.id}`, 
+      customer: o.name, 
+      contact: o.contact, 
+      address: o.address, 
+      total: Number(o.totalPrice || 0), 
+      discount: Number(o.discount || 0), 
+      netTotal: Number(o.net_total || 0), 
+      status: o.status, 
+      type: o.type, 
+      payment: o.payment, 
+      ref: o.ref, 
+      payment_proof_image_url: o.payment_proof_image_url || null,
+      payment_proof_public_id: o.payment_proof_public_id || null,
+      createdAt: o.createdAt 
+    }));
 
     localStorage.setItem('suppliers', JSON.stringify(suppliers));
     localStorage.setItem('orders', JSON.stringify(orders));
@@ -2880,7 +3828,18 @@ async function init() {
   renderSuppliers();
   renderOrders();
   setupScannerInputListener();
-  renderLastScannedProduct();
+  renderScannedProducts();
+  
+  // Setup process sale and clear buttons
+  const processBtn = document.getElementById('processSaleBtn');
+  if (processBtn) {
+    processBtn.addEventListener('click', processScannedSale);
+  }
+  
+  const clearBtn = document.getElementById('clearScannedBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', clearScannedProducts);
+  }
 
   // Periodically refresh orders so mobile updates (e.g., payment refs) appear
   setInterval(async () => {
@@ -2906,7 +3865,23 @@ async function refreshOrdersOnly() {
     if (!r.ok) throw new Error('orders');
     ordersRes = await r.json();
   }
-  orders = (ordersRes.orders || []).map(o => ({ id: o.id, displayId: o.order_code || `ORD${o.id}`, customer: o.name, contact: o.contact, address: o.address, total: Number(o.totalPrice || 0), discount: Number(o.discount || 0), netTotal: Number(o.net_total || 0), status: o.status, type: o.type, payment: o.payment, ref: o.ref, createdAt: o.createdAt }));
+  orders = (ordersRes.orders || []).map(o => ({ 
+    id: o.id, 
+    displayId: o.order_code || `ORD${o.id}`, 
+    customer: o.name, 
+    contact: o.contact, 
+    address: o.address, 
+    total: Number(o.totalPrice || 0), 
+    discount: Number(o.discount || 0), 
+    netTotal: Number(o.net_total || 0), 
+    status: o.status, 
+    type: o.type, 
+    payment: o.payment, 
+    ref: o.ref, 
+    payment_proof_image_url: o.payment_proof_image_url || null,
+    payment_proof_public_id: o.payment_proof_public_id || null,
+    createdAt: o.createdAt 
+  }));
   localStorage.setItem('orders', JSON.stringify(orders));
   renderOrders();
   updateDashboard();
