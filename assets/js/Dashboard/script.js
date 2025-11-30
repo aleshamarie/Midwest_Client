@@ -227,6 +227,10 @@ function showSection(id) {
     console.log('Rendering inventory section...');
     renderInventory();
   }
+  if (id === 'inStoreSalesSection') {
+    console.log('Rendering in-store sales section...');
+    renderScannedProducts();
+  }
   if (id === 'ordersSection') renderOrders();
   if (id === 'suppliersSection') renderSuppliers();
   if (id === 'lowStockSection') {
@@ -284,14 +288,12 @@ function renderInventory() {
           orderable: false,
           data: null,
           render: function(data, type, row) {
-            // Consolidate actions into a single Edit entry; other actions are available inside the Edit modal
-            return `<button onclick="editProductFromTable('${row.id}')" class="text-blue-600">Edit</button>`;
+            // Use data attribute to avoid issues with product ID in onclick
+            const productId = String(row.id || row._id || '');
+            return `<button class="edit-product-btn text-blue-600" data-product-id="${productId}">Edit</button>`;
           }
         }
       ],
-      drawCallback: function() {
-        // Table drawn - no special processing needed
-      },
       serverSide: true,
       processing: true,
       ajax: {
@@ -313,6 +315,16 @@ function renderInventory() {
         }
       },
       drawCallback: function() {
+        // Attach event listeners to edit buttons using event delegation
+        $('#inventoryTable').off('click', '.edit-product-btn').on('click', '.edit-product-btn', function() {
+          const productId = $(this).data('product-id');
+          if (productId) {
+            editProductFromTable(productId);
+          } else {
+            console.error('Product ID not found in data attribute');
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Product ID not found. Please try again.' });
+          }
+        });
         // Lazy load images when table is drawn
         setTimeout(() => {
           lazyLoadImages();
@@ -507,6 +519,19 @@ async function processScannedSale() {
   const totalItems = scannedProducts.reduce((sum, p) => sum + p.quantity, 0);
   const totalValue = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
   
+  // Get and calculate discount
+  const discountInput = document.getElementById('scannerDiscount')?.value.trim() || '';
+  let discount = 0;
+  if (discountInput) {
+    if (discountInput.includes('%')) {
+      const percent = parseFloat(discountInput.replace('%', '').trim()) || 0;
+      discount = (percent / 100) * totalValue;
+    } else {
+      discount = parseFloat(discountInput) || 0;
+    }
+  }
+  const netTotal = totalValue - discount;
+  
   const itemsList = scannedProducts.map(p => 
     `• ${p.name}${p.variantName ? ` (${p.variantName})` : ''} - Qty: ${p.quantity} - ₱${(p.price * p.quantity).toFixed(2)}`
   ).join('\n');
@@ -529,7 +554,9 @@ async function processScannedSale() {
         </div>
         <div class="border-t pt-3">
           <p><strong>Total Items:</strong> ${totalItems}</p>
-          <p><strong>Total Value:</strong> ₱${totalValue.toFixed(2)}</p>
+          <p><strong>Subtotal:</strong> ₱${totalValue.toFixed(2)}</p>
+          ${discount > 0 ? `<p><strong>Discount:</strong> ₱${discount.toFixed(2)}</p>` : ''}
+          <p class="font-semibold text-lg"><strong>Net Total:</strong> ₱${netTotal.toFixed(2)}</p>
         </div>
         <p class="mt-3 text-red-600 font-semibold">This will decrease stock. Continue?</p>
       </div>
@@ -582,7 +609,19 @@ async function processScannedSale() {
         }));
 
         const totalPrice = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
-        const netTotal = totalPrice; // No discount for in-store sales by default
+        
+        // Calculate discount (reuse the same calculation from above)
+        const discountInput = document.getElementById('scannerDiscount')?.value.trim() || '';
+        let calculatedDiscount = 0;
+        if (discountInput) {
+          if (discountInput.includes('%')) {
+            const percent = parseFloat(discountInput.replace('%', '').trim()) || 0;
+            calculatedDiscount = (percent / 100) * totalPrice;
+          } else {
+            calculatedDiscount = parseFloat(discountInput) || 0;
+          }
+        }
+        const calculatedNetTotal = totalPrice - calculatedDiscount;
 
         // Generate a device ID for in-store sales (use a fixed identifier)
         const inStoreDeviceId = 'INSTORE-' + new Date().getTime();
@@ -597,8 +636,8 @@ async function processScannedSale() {
             payment: 'Cash',
             ref: null,
             totalPrice: totalPrice,
-            discount: 0,
-            net_total: netTotal,
+            discount: calculatedDiscount,
+            net_total: calculatedNetTotal,
             status: 'Completed',
             type: 'In-Store',
             device_id: inStoreDeviceId,
@@ -612,7 +651,9 @@ async function processScannedSale() {
           title: 'Sale Processed!',
           html: `
             <p>Successfully processed ${batchResult.processed} item(s).</p>
-            <p class="mt-2">Total: ₱${totalPrice.toFixed(2)}</p>
+            <p class="mt-2">Subtotal: ₱${totalPrice.toFixed(2)}</p>
+            ${calculatedDiscount > 0 ? `<p>Discount: ₱${calculatedDiscount.toFixed(2)}</p>` : ''}
+            <p class="mt-2 font-semibold">Net Total: ₱${calculatedNetTotal.toFixed(2)}</p>
             <p class="text-sm text-gray-600 mt-2">Order created and recorded in In-Store Sales.</p>
             ${batchResult.errorCount && batchResult.errorCount > 0 
               ? `<p class="text-red-600 mt-2">${batchResult.errorCount} error(s) occurred.</p>` 
@@ -637,6 +678,10 @@ async function processScannedSale() {
       // Clear scanned products
       scannedProducts = [];
       renderScannedProducts();
+      
+      // Clear discount field
+      const discountInput = document.getElementById('scannerDiscount');
+      if (discountInput) discountInput.value = '';
       
       // Clear barcode display
       const barcodeEl = document.getElementById('scannerBarcode');
@@ -677,6 +722,10 @@ function clearScannedProducts() {
     if (result.isConfirmed) {
       scannedProducts = [];
       renderScannedProducts();
+      
+      // Clear discount field
+      const discountInput = document.getElementById('scannerDiscount');
+      if (discountInput) discountInput.value = '';
       
       // Clear barcode display
       const barcodeEl = document.getElementById('scannerBarcode');
@@ -744,6 +793,13 @@ function exportInventoryPDF() {
 // Table action functions (for server-side pagination)
 async function editProductFromTable(productId) {
   try {
+    // Validate product ID format (MongoDB ObjectId is 24 hex characters)
+    if (!productId || typeof productId !== 'string' || productId.length !== 24) {
+      console.error('Invalid product ID format:', productId);
+      Swal.fire({ icon: 'error', title: 'Invalid product ID', text: 'The product ID is invalid or corrupted.' });
+      return;
+    }
+    
     console.log('editProductFromTable called with productId:', productId);
     const response = await apiFetch(`/products/${productId}`);
     const product = response.product;
@@ -772,7 +828,9 @@ async function editProductFromTable(productId) {
     
     // Store the product ID for saving and enable extra actions in modal
     const modal = document.getElementById('productModal');
-    modal.setAttribute('data-product-id', productId);
+    if (modal) {
+      modal.setAttribute('data-product-id', productId);
+    }
     const receiveBtn = document.getElementById('editReceiveBtn');
     const deleteBtn = document.getElementById('editDeleteBtn');
     if (receiveBtn) receiveBtn.classList.remove('hidden');
@@ -1000,13 +1058,17 @@ function addVariant(variantData = null) {
     </div>
     <div class="grid grid-cols-2 gap-2 mb-2">
       <div>
-        <label class="block text-xs text-gray-600 mb-1">Price</label>
-        <input type="number" step="0.01" class="variant-price border rounded w-full px-2 py-1 text-sm" placeholder="0.00" value="${variantData?.price || ''}" required>
+        <label class="block text-xs text-gray-600 mb-1">Cost</label>
+        <input type="number" step="0.01" class="variant-cost border rounded w-full px-2 py-1 text-sm" placeholder="0.00" value="${variantData?.cost || ''}">
       </div>
       <div>
         <label class="block text-xs text-gray-600 mb-1">Stock</label>
         <input type="number" class="variant-stock border rounded w-full px-2 py-1 text-sm" placeholder="0" value="${variantData?.stock || ''}" required>
       </div>
+    </div>
+    <div class="mb-2">
+      <label class="block text-xs text-gray-600 mb-1">Price</label>
+      <input type="number" step="0.01" class="variant-price border rounded w-full px-2 py-1 text-sm" placeholder="0.00" value="${variantData?.price || ''}" required>
     </div>
     <div class="mb-2">
       <label class="block text-xs text-gray-600 mb-1">Barcodes (one per line)</label>
@@ -1070,6 +1132,7 @@ function getVariantsData() {
   variantDivs.forEach(div => {
     const name = div.querySelector('.variant-name')?.value?.trim() || null;
     const sku = div.querySelector('.variant-sku')?.value?.trim() || null;
+    const cost = parseFloat(div.querySelector('.variant-cost')?.value) || 0;
     const price = parseFloat(div.querySelector('.variant-price')?.value) || 0;
     const stock = parseInt(div.querySelector('.variant-stock')?.value) || 0;
     const barcodesText = div.querySelector('.variant-barcodes')?.value?.trim() || '';
@@ -1085,6 +1148,7 @@ function getVariantsData() {
       const variantData = {
         name,
         sku,
+        cost,
         price,
         stock,
         barcodes,
@@ -1215,9 +1279,16 @@ async function saveProduct() {
   }
 
   // Check if we're editing an existing product (server-side)
-  const productId = document.getElementById('productModal').getAttribute('data-product-id');
+  const productId = document.getElementById('productModal')?.getAttribute('data-product-id');
   
   if (productId) {
+    // Validate product ID format
+    if (typeof productId !== 'string' || productId.length !== 24) {
+      console.error('Invalid product ID format:', productId);
+      Swal.fire({ icon: 'error', title: 'Invalid product ID', text: 'The product ID is invalid. Please try editing the product again.' });
+      return;
+    }
+    
     // Editing existing product
     try {
       const res = await apiFetch(`/products/${productId}`, { 
@@ -1306,6 +1377,12 @@ async function deleteProductFromModal() {
 // Fetch existing image from MongoDB for a product
 async function fetchProductImage(productId) {
   try {
+    // Validate product ID before making request
+    if (!productId || typeof productId !== 'string' || productId.length !== 24) {
+      console.error('Invalid product ID in fetchProductImage:', productId);
+      return null;
+    }
+    
     console.log('Fetching image for product:', productId);
     
     // Get image URL from Cloudinary
@@ -4213,38 +4290,7 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
   document.getElementById('analyticsProfit').textContent = '₱' + fmt(selected.gross_profit);
   document.getElementById('analyticsMargin').textContent = fmtPercent(selected.margin_percent) + '%';
   
-  // Calculate efficiency score (weighted performance vs today)
-  let efficiencyScore = 0;
-  if (today && !isToday) {
-    const netSalesChange = today.net_sales > 0 ? ((selected.net_sales - today.net_sales) / today.net_sales) * 100 : 0;
-    const profitChange = today.gross_profit > 0 ? ((selected.gross_profit - today.gross_profit) / today.gross_profit) * 100 : 0;
-    const marginChange = selected.margin_percent - today.margin_percent;
-    const costEfficiency = today.cost_of_goods > 0 ? ((today.cost_of_goods - selected.cost_of_goods) / today.cost_of_goods) * 100 : 0;
-    
-    efficiencyScore = (netSalesChange * 0.3 + profitChange * 0.4 + marginChange * 0.2 + costEfficiency * 0.1);
-    efficiencyScore = Math.max(-100, Math.min(100, efficiencyScore));
-  }
-  document.getElementById('analyticsEfficiency').textContent = (efficiencyScore >= 0 ? '+' : '') + fmtPercent(efficiencyScore) + '%';
-  document.getElementById('analyticsEfficiency').className = 'text-2xl font-bold ' + (efficiencyScore >= 0 ? 'text-green-700' : 'text-red-700');
 
-  // Update change indicators
-  const updateChangeIndicator = (elementId, selectedVal, todayVal, reverse = false) => {
-    const element = document.getElementById(elementId);
-    if (!today || isToday || selectedVal === todayVal) {
-      element.textContent = '';
-      element.className = 'text-xs mt-1';
-      return;
-    }
-    const change = selectedVal - todayVal;
-    const changePercent = todayVal > 0 ? ((change / todayVal) * 100) : (selectedVal > 0 ? 100 : 0);
-    const isGood = reverse ? change < 0 : change > 0;
-    element.textContent = (change >= 0 ? '+' : '') + fmtPercent(changePercent) + '%';
-    element.className = 'text-xs mt-1 font-semibold ' + (isGood ? 'text-green-600' : 'text-red-600');
-  };
-
-  updateChangeIndicator('analyticsNetSalesChange', selected.net_sales, today?.net_sales);
-  updateChangeIndicator('analyticsProfitChange', selected.gross_profit, today?.gross_profit);
-  updateChangeIndicator('analyticsMarginChange', selected.margin_percent, today?.margin_percent);
 
   // Update date label
   document.getElementById('analyticsDateLabel').textContent = isToday ? 'Viewing Today\'s Data' : `Comparing ${date} with Today`;
@@ -4282,11 +4328,6 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
   metrics.forEach(metric => {
     if (isToday && !today) return;
     
-    const change = metric.selected - (metric.today || 0);
-    const changePercent = metric.today > 0 ? ((change / metric.today) * 100) : (metric.selected > 0 ? 100 : 0);
-    const isGood = metric.reverse ? change < 0 : change > 0;
-    const changeText = isToday ? '' : (change === 0 ? 'No change' : `${change >= 0 ? '+' : ''}${fmtPercent(changePercent)}%`);
-    
     const div = document.createElement('div');
     div.className = 'flex items-center justify-between p-2 bg-white rounded border';
     div.innerHTML = `
@@ -4296,7 +4337,6 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
       </div>
       <div class="text-right">
         <div class="text-sm font-semibold">₱${fmt(metric.selected)}</div>
-        ${!isToday && changeText ? `<div class="text-xs ${isGood ? 'text-green-600' : change === 0 ? 'text-gray-500' : 'text-red-600'}">${changeText}</div>` : ''}
       </div>
     `;
     breakdown.appendChild(div);
@@ -4320,56 +4360,37 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
   
   // Net Sales insight
   if (selected.net_sales > today.net_sales) {
-    const increase = ((selected.net_sales - today.net_sales) / today.net_sales * 100).toFixed(1);
-    insightsList.push(`✅ <strong>Net Sales</strong> were ${increase}% higher than today, indicating strong performance.`);
+    insightsList.push(`✅ <strong>Net Sales</strong> were higher than today, indicating strong performance.`);
   } else if (selected.net_sales < today.net_sales) {
-    const decrease = ((today.net_sales - selected.net_sales) / today.net_sales * 100).toFixed(1);
-    insightsList.push(`⚠️ <strong>Net Sales</strong> were ${decrease}% lower than today.`);
+    insightsList.push(`⚠️ <strong>Net Sales</strong> were lower than today.`);
   }
 
   // Profit insight
   if (selected.gross_profit > today.gross_profit) {
-    const increase = ((selected.gross_profit - today.gross_profit) / today.gross_profit * 100).toFixed(1);
-    insightsList.push(`💰 <strong>Gross Profit</strong> was ${increase}% higher, showing better profitability.`);
+    insightsList.push(`💰 <strong>Gross Profit</strong> was higher, showing better profitability.`);
   } else if (selected.gross_profit < today.gross_profit) {
-    const decrease = ((today.gross_profit - selected.gross_profit) / today.gross_profit * 100).toFixed(1);
-    insightsList.push(`📉 <strong>Gross Profit</strong> was ${decrease}% lower than today.`);
+    insightsList.push(`📉 <strong>Gross Profit</strong> was lower than today.`);
   }
 
   // Margin insight
   if (selected.margin_percent > today.margin_percent) {
-    const diff = (selected.margin_percent - today.margin_percent).toFixed(2);
-    insightsList.push(`📊 <strong>Profit Margin</strong> was ${diff} percentage points higher, indicating better cost efficiency.`);
+    insightsList.push(`📊 <strong>Profit Margin</strong> was higher, indicating better cost efficiency.`);
   } else if (selected.margin_percent < today.margin_percent) {
-    const diff = (today.margin_percent - selected.margin_percent).toFixed(2);
-    insightsList.push(`📊 <strong>Profit Margin</strong> was ${diff} percentage points lower.`);
+    insightsList.push(`📊 <strong>Profit Margin</strong> was lower.`);
   }
 
   // Cost efficiency
   if (selected.cost_of_goods < today.cost_of_goods && selected.net_sales > 0) {
-    const savings = ((today.cost_of_goods - selected.cost_of_goods) / today.cost_of_goods * 100).toFixed(1);
-    insightsList.push(`💡 <strong>Cost of Goods</strong> was ${savings}% lower, showing better inventory management.`);
+    insightsList.push(`💡 <strong>Cost of Goods</strong> was lower, showing better inventory management.`);
   } else if (selected.cost_of_goods > today.cost_of_goods) {
-    const increase = ((selected.cost_of_goods - today.cost_of_goods) / today.cost_of_goods * 100).toFixed(1);
-    insightsList.push(`⚠️ <strong>Cost of Goods</strong> was ${increase}% higher, which may have impacted profitability.`);
+    insightsList.push(`⚠️ <strong>Cost of Goods</strong> was higher, which may have impacted profitability.`);
   }
 
   // Discount analysis
   if (selected.discounts > today.discounts) {
-    const increase = ((selected.discounts - today.discounts) / (today.discounts || 1) * 100).toFixed(1);
-    insightsList.push(`🎫 <strong>Discounts</strong> were ${increase}% higher, potentially driving more sales volume.`);
+    insightsList.push(`🎫 <strong>Discounts</strong> were higher, potentially driving more sales volume.`);
   }
 
-  // Overall recommendation
-  if (efficiencyScore > 20) {
-    insightsList.push(`<strong class="text-green-700">🌟 Excellent Performance:</strong> This date significantly outperformed today across multiple metrics.`);
-  } else if (efficiencyScore > 0) {
-    insightsList.push(`<strong class="text-blue-700">👍 Good Performance:</strong> This date performed better than today.`);
-  } else if (efficiencyScore > -20) {
-    insightsList.push(`<strong class="text-orange-700">📊 Average Performance:</strong> Similar performance to today.`);
-  } else {
-    insightsList.push(`<strong class="text-red-700">⚠️ Below Average:</strong> This date underperformed compared to today. Consider analyzing factors that may have contributed.`);
-  }
 
   insightsList.forEach(insight => {
     const p = document.createElement('p');
