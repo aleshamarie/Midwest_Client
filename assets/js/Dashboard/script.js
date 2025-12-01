@@ -196,6 +196,7 @@ const DASHBOARD_LOW_STOCK_LIMIT = 20;
 const LOW_STOCK_MODAL_LIMIT = 20;
 let showAllLowStockInModal = false;
 let activeDateFilter = null;
+let dashboardLowStockDisplayLimit = DASHBOARD_LOW_STOCK_LIMIT; // Track how many items to show in dashboard
 
 function getLowStockThreshold(product) {
   const t = Number(product.lowStockThreshold || product.low_stock_threshold || 5);
@@ -3529,18 +3530,19 @@ async function updateDashboard() {
   // low stock list on dashboard
   const lowStockList = document.getElementById('lowStockList');
   if (lowStockItems.length) {
-    const limited = lowStockItems.slice(0, DASHBOARD_LOW_STOCK_LIMIT);
-    const extraCount = Math.max(lowStockItems.length - DASHBOARD_LOW_STOCK_LIMIT, 0);
+    const limited = lowStockItems.slice(0, dashboardLowStockDisplayLimit);
+    const extraCount = Math.max(lowStockItems.length - dashboardLowStockDisplayLimit, 0);
     const itemsHtml = limited.map(item => {
       const actualStock = Math.max(0, item.stock || 0); // Ensure stock is never negative
       const stockText = actualStock === 0 ? 'Out of Stock' : `${actualStock} left`;
       const stockColor = actualStock === 0 ? 'text-red-600' : 'text-yellow-600';
+      const productId = item.id || item._id || '';
       return `<li class="flex justify-between items-center">
         <span>${item.name} <span class="${stockColor}">(${stockText})</span></span>
-        <button class="text-indigo-600 ml-2" onclick="openRestockModalFromLowStock(${item.id})">Receive</button>
+        <button class="text-indigo-600 ml-2" onclick="openRestockModalFromLowStock('${productId}')">Receive</button>
       </li>`;
     }).join('');
-    const extraHtml = extraCount > 0 ? `<li class="mt-2 text-sm text-gray-600">and ${extraCount} more… <button class="text-blue-600" onclick="loadAllLowStockItems()">Show 5 more</button></li>` : '';
+    const extraHtml = extraCount > 0 ? `<li class="mt-2 text-sm text-gray-600">and ${extraCount} more… <button class="text-blue-600" onclick="showMoreLowStockItems()">Show 5 more</button></li>` : '';
     lowStockList.innerHTML = itemsHtml + extraHtml;
   } else {
     lowStockList.innerHTML = '<li>No low stock items</li>';
@@ -3549,6 +3551,13 @@ async function updateDashboard() {
   // simple chart: weekly sample (placeholder)
   // try to load real data; fallback to placeholder if fails
   loadSalesOverview();
+}
+
+// Function to show 5 more low stock items in the dashboard
+function showMoreLowStockItems() {
+  dashboardLowStockDisplayLimit += 5;
+  // Re-render the low stock list with the new limit
+  updateDashboard();
 }
 
 // Chart.js setup
@@ -3933,18 +3942,19 @@ async function loadFromBackend() {
     // Update low stock list with API data
     const lowStockList = document.getElementById('lowStockList');
     if (lowStockRes.products && lowStockRes.products.length > 0) {
-      const limited = lowStockRes.products.slice(0, DASHBOARD_LOW_STOCK_LIMIT);
-      const extraCount = Math.max(lowStockRes.products.length - DASHBOARD_LOW_STOCK_LIMIT, 0);
+      const limited = lowStockRes.products.slice(0, dashboardLowStockDisplayLimit);
+      const extraCount = Math.max(lowStockRes.products.length - dashboardLowStockDisplayLimit, 0);
       const itemsHtml = limited.map(item => {
         const actualStock = Math.max(0, item.stock || 0); // Ensure stock is never negative
         const stockText = actualStock === 0 ? 'Out of Stock' : `${actualStock} left`;
         const stockColor = actualStock === 0 ? 'text-red-600' : 'text-yellow-600';
+        const productId = item.id || item._id || '';
         return `<li class="flex justify-between items-center">
           <span>${item.name} <span class="${stockColor}">(${stockText})</span></span>
-          <button class="text-indigo-600 ml-2" onclick="openRestockModalFromLowStock(${item.id})">Receive</button>
+          <button class="text-indigo-600 ml-2" onclick="openRestockModalFromLowStock('${productId}')">Receive</button>
         </li>`;
       }).join('');
-      const extraHtml = extraCount > 0 ? `<li class="mt-2 text-sm text-gray-600">and ${extraCount} more… <button class="text-blue-600" onclick="loadAllLowStockItems()">Show 5 more</button></li>` : '';
+      const extraHtml = extraCount > 0 ? `<li class="mt-2 text-sm text-gray-600">and ${extraCount} more… <button class="text-blue-600" onclick="showMoreLowStockItems()">Show 5 more</button></li>` : '';
       lowStockList.innerHTML = itemsHtml + extraHtml;
     } else {
       lowStockList.innerHTML = '<li>No low stock items</li>';
