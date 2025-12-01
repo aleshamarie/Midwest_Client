@@ -609,7 +609,7 @@ async function confirmSaleProcessing() {
         // Prepare order items from scanned products
         const orderItems = scannedProducts.map(p => ({
           product_id: p.id, // MongoDB ObjectId from search result
-          product_name: p.name + (p.variantName ? ` (${p.variantName})` : ''),
+          product_name: p.name, // Store base product name only, variant will be shown separately
           quantity: p.quantity,
           price: p.price,
           total_price: p.price * p.quantity,
@@ -2264,12 +2264,24 @@ function openOrderReviewModal(i) {
       }
       const rows = items.map(it => {
         // Handle different product name sources
-        const baseName = it.product_name || 
+        let baseName = it.product_name || 
                     it.name || 
                     (it.product_id && it.product_id.name) || 
                     (it.product_details && it.product_details.name) ||
                     'Unknown Product';
-        const variantName = it.variant_name || null;
+        
+        // Extract variant name - prefer variant_name field, but also check if it's embedded in product_name
+        let variantName = it.variant_name || null;
+        
+        // If variant_name is not set but product_name contains variant info (old format), extract it
+        if (!variantName && baseName.includes(' (')) {
+          const match = baseName.match(/^(.+?)\s*\((.+?)\)$/);
+          if (match) {
+            baseName = match[1].trim();
+            variantName = match[2].trim();
+          }
+        }
+        
         const displayName = variantName ? `${baseName} (${variantName})` : baseName;
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || (it.product_id && it.product_id.price) || it.price || 0);
@@ -2290,12 +2302,24 @@ function openOrderReviewModal(i) {
     } catch (_e) {
       const rows = (o.items || []).map(it => {
         // Handle different product name sources
-        const baseName = it.product_name || 
+        let baseName = it.product_name || 
                     it.name || 
                     (it.product_id && it.product_id.name) || 
                     (it.product_details && it.product_details.name) ||
                     'Unknown Product';
-        const variantName = it.variant_name || null;
+        
+        // Extract variant name - prefer variant_name field, but also check if it's embedded in product_name
+        let variantName = it.variant_name || null;
+        
+        // If variant_name is not set but product_name contains variant info (old format), extract it
+        if (!variantName && baseName.includes(' (')) {
+          const match = baseName.match(/^(.+?)\s*\((.+?)\)$/);
+          if (match) {
+            baseName = match[1].trim();
+            variantName = match[2].trim();
+          }
+        }
+        
         const displayName = variantName ? `${baseName} (${variantName})` : baseName;
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || (it.product_id && it.product_id.price) || it.price || 0);
@@ -3420,12 +3444,24 @@ function showReceipt(order) {
       }
       const rows = items.map(it => {
         // Handle different product name sources
-        const baseName = it.product_name || 
+        let baseName = it.product_name || 
                     it.name || 
                     (it.product_id && it.product_id.name) || 
                     (it.product_details && it.product_details.name) ||
                     'Unknown Product';
-        const variantName = it.variant_name || null;
+        
+        // Extract variant name - prefer variant_name field, but also check if it's embedded in product_name
+        let variantName = it.variant_name || null;
+        
+        // If variant_name is not set but product_name contains variant info (old format), extract it
+        if (!variantName && baseName.includes(' (')) {
+          const match = baseName.match(/^(.+?)\s*\((.+?)\)$/);
+          if (match) {
+            baseName = match[1].trim();
+            variantName = match[2].trim();
+          }
+        }
+        
         const displayName = variantName ? `${baseName} (${variantName})` : baseName;
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || it.price || 0);
