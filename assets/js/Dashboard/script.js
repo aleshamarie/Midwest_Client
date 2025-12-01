@@ -2264,16 +2264,23 @@ function openOrderReviewModal(i) {
       }
       const rows = items.map(it => {
         // Handle different product name sources
-        const name = it.product_name || 
+        const baseName = it.product_name || 
                     it.name || 
                     (it.product_id && it.product_id.name) || 
                     (it.product_details && it.product_details.name) ||
                     'Unknown Product';
+        const variantName = it.variant_name || null;
+        const displayName = variantName ? `${baseName} (${variantName})` : baseName;
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || (it.product_id && it.product_id.price) || it.price || 0);
         const total = Number(it.total_price || (qty * price));
         return `<tr>
-          <td class="px-3 py-2">${name}</td>
+          <td class="px-3 py-2">
+            <div class="flex flex-col">
+              <span>${displayName}</span>
+              ${variantName ? `<span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded">${variantName}</span>` : ''}
+            </div>
+          </td>
           <td class="px-3 py-2 text-right">${qty}</td>
           <td class="px-3 py-2 text-right">₱${price.toFixed(2)}</td>
           <td class="px-3 py-2 text-right">₱${total.toFixed(2)}</td>
@@ -2283,16 +2290,23 @@ function openOrderReviewModal(i) {
     } catch (_e) {
       const rows = (o.items || []).map(it => {
         // Handle different product name sources
-        const name = it.product_name || 
+        const baseName = it.product_name || 
                     it.name || 
                     (it.product_id && it.product_id.name) || 
                     (it.product_details && it.product_details.name) ||
                     'Unknown Product';
+        const variantName = it.variant_name || null;
+        const displayName = variantName ? `${baseName} (${variantName})` : baseName;
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || (it.product_id && it.product_id.price) || it.price || 0);
         const total = Number(it.total_price || (qty * price));
         return `<tr>
-          <td class="px-3 py-2">${name}</td>
+          <td class="px-3 py-2">
+            <div class="flex flex-col">
+              <span>${displayName}</span>
+              ${variantName ? `<span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded">${variantName}</span>` : ''}
+            </div>
+          </td>
           <td class="px-3 py-2 text-right">${qty}</td>
           <td class="px-3 py-2 text-right">₱${price.toFixed(2)}</td>
           <td class="px-3 py-2 text-right">₱${total.toFixed(2)}</td>
@@ -3406,16 +3420,23 @@ function showReceipt(order) {
       }
       const rows = items.map(it => {
         // Handle different product name sources
-        const name = it.product_name || 
+        const baseName = it.product_name || 
                     it.name || 
                     (it.product_id && it.product_id.name) || 
                     (it.product_details && it.product_details.name) ||
                     'Unknown Product';
+        const variantName = it.variant_name || null;
+        const displayName = variantName ? `${baseName} (${variantName})` : baseName;
         const qty = Number(it.quantity || 0);
         const price = Number(it.unit_price || it.price || 0);
         const total = Number(it.total_price || (qty * price));
         return `<tr>
-          <td class="px-3 py-2">${name}</td>
+          <td class="px-3 py-2">
+            <div class="flex flex-col">
+              <span>${displayName}</span>
+              ${variantName ? `<span class="inline-block mt-1 px-2 py-0.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded">${variantName}</span>` : ''}
+            </div>
+          </td>
           <td class="px-3 py-2 text-right">${qty}</td>
           <td class="px-3 py-2 text-right">₱${price.toFixed(2)}</td>
           <td class="px-3 py-2 text-right">₱${total.toFixed(2)}</td>
