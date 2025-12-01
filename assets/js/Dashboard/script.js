@@ -209,18 +209,20 @@ function showSection(id) {
   document.getElementById(id).classList.remove('hidden');
   if (id === 'dashboardSection') updateDashboard();
   if (id === 'analyticsSection') {
-    // Load analytics data when section is shown
-    loadDailySalesSummary();
     // Sync the analytics date filter with the main date filter
     const analyticsDateFilter = document.getElementById('analyticsDateFilter');
     if (analyticsDateFilter) {
       analyticsDateFilter.value = activeDateFilter || '';
     }
-    // Initialize chart if not already done
+    // Initialize charts first, then load data
     setTimeout(() => {
       if (!comparisonChart) {
         initializeComparisonChart();
       }
+      loadTop5Items();
+      initializeSalesByItemChart();
+      // Load analytics data after charts are initialized
+      loadDailySalesSummary();
     }, 100);
   }
   if (id === 'inventorySection') {
@@ -531,46 +533,52 @@ async function processScannedSale() {
     }
   }
   const netTotal = totalValue - discount;
+
+  // Populate the modal
+  const itemsContainer = document.getElementById('saleConfirmationItems');
+  const summaryContainer = document.getElementById('saleConfirmationSummary');
   
-  const itemsList = scannedProducts.map(p => 
-    `• ${p.name}${p.variantName ? ` (${p.variantName})` : ''} - Qty: ${p.quantity} - ₱${(p.price * p.quantity).toFixed(2)}`
-  ).join('\n');
-
-  const confirmationText = `Confirm Sale:\n\n${itemsList}\n\nTotal Items: ${totalItems}\nTotal Value: ₱${totalValue.toFixed(2)}\n\nThis will decrease stock. Continue?`;
-
-  const result = await Swal.fire({
-    icon: 'question',
-    title: 'Confirm Sale',
-    html: `
-      <div class="text-left">
-        <p class="mb-3 font-semibold">Items to process:</p>
-        <div class="max-h-60 overflow-y-auto mb-4">
-          ${scannedProducts.map(p => `
-            <div class="mb-2 p-2 bg-gray-50 rounded">
-              <strong>${p.name}${p.variantName ? ` (${p.variantName})` : ''}</strong><br>
-              Quantity: ${p.quantity} × ₱${p.price.toFixed(2)} = ₱${(p.price * p.quantity).toFixed(2)}
-            </div>
-          `).join('')}
-        </div>
-        <div class="border-t pt-3">
-          <p><strong>Total Items:</strong> ${totalItems}</p>
-          <p><strong>Subtotal:</strong> ₱${totalValue.toFixed(2)}</p>
-          ${discount > 0 ? `<p><strong>Discount:</strong> ₱${discount.toFixed(2)}</p>` : ''}
-          <p class="font-semibold text-lg"><strong>Net Total:</strong> ₱${netTotal.toFixed(2)}</p>
-        </div>
-        <p class="mt-3 text-red-600 font-semibold">This will decrease stock. Continue?</p>
+  if (itemsContainer) {
+    itemsContainer.innerHTML = scannedProducts.map(p => `
+      <div class="p-2 bg-gray-50 rounded">
+        <strong>${p.name}${p.variantName ? ` (${p.variantName})` : ''}</strong><br>
+        <span class="text-sm text-gray-600">Quantity: ${p.quantity} × ₱${p.price.toFixed(2)} = ₱${(p.price * p.quantity).toFixed(2)}</span>
       </div>
-    `,
-    showCancelButton: true,
-    confirmButtonText: 'Yes, Process Sale',
-    cancelButtonText: 'Cancel',
-    confirmButtonColor: '#10b981',
-    cancelButtonColor: '#ef4444'
-  });
-
-  if (!result.isConfirmed) {
-    return;
+    `).join('');
   }
+
+  if (summaryContainer) {
+    summaryContainer.innerHTML = `
+      <p><strong>Total Items:</strong> ${totalItems}</p>
+      <p><strong>Subtotal:</strong> ₱${totalValue.toFixed(2)}</p>
+      ${discount > 0 ? `<p><strong>Discount:</strong> ₱${discount.toFixed(2)}</p>` : ''}
+      <p class="font-semibold text-lg mt-2"><strong>Net Total:</strong> ₱${netTotal.toFixed(2)}</p>
+    `;
+  }
+
+  // Reset payment method to Cash
+  const paymentSelect = document.getElementById('saleConfirmationPayment');
+  if (paymentSelect) {
+    paymentSelect.value = 'Cash';
+  }
+
+  // Show the modal
+  const modal = document.getElementById('saleConfirmationModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+  }
+}
+
+function closeSaleConfirmationModal() {
+  const modal = document.getElementById('saleConfirmationModal');
+  if (modal) {
+    modal.classList.add('hidden');
+  }
+}
+
+async function confirmSaleProcessing() {
+  // Close the modal
+  closeSaleConfirmationModal();
 
   try {
     // Prepare items for batch processing
@@ -623,6 +631,9 @@ async function processScannedSale() {
         }
         const calculatedNetTotal = totalPrice - calculatedDiscount;
 
+        // Get payment method from modal
+        const paymentMethod = document.getElementById('saleConfirmationPayment')?.value || 'Cash';
+
         // Generate a device ID for in-store sales (use a fixed identifier)
         const inStoreDeviceId = 'INSTORE-' + new Date().getTime();
 
@@ -633,8 +644,8 @@ async function processScannedSale() {
             name: 'In-Store Sale',
             contact: '',
             address: '',
-            payment: 'Cash',
-            ref: null,
+            payment: paymentMethod,
+            ref: null, // No reference number for in-store GCash
             totalPrice: totalPrice,
             discount: calculatedDiscount,
             net_total: calculatedNetTotal,
@@ -1086,7 +1097,7 @@ function addVariant(variantData = null) {
         </div>
         <div id="variant-image-upload-${variantId}" class="${variantData?.image_url ? 'hidden' : ''}">
           <input type="file" id="variant-image-input-${variantId}" accept="image/*" class="hidden" onchange="handleVariantImageSelect(event, '${variantId}')">
-          <button type="button" onclick="document.getElementById('variant-image-input-${variantId}').click()" class="text-xs text-blue-600 hover:text-blue-800">📷 Upload Image</button>
+          <button type="button" onclick="document.getElementById('variant-image-input-${variantId}').click()" class="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"><i class="bi bi-camera"></i> Upload Image</button>
         </div>
         <input type="hidden" class="variant-image-url" value="${variantData?.image_url || ''}">
         <input type="hidden" class="variant-image-public-id" value="${variantData?.image_public_id || ''}">
@@ -1917,10 +1928,10 @@ function formatOrderDate(dateString) {
       return 'Invalid Date';
     }
     
-    // Use UTC methods to avoid timezone issues
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
+    // Use local time methods to display date in user's timezone
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
     
     return `${month}/${day}/${year}`;
   } catch (error) {
@@ -2038,16 +2049,16 @@ function renderOrders() {
     let statusIcon = '';
     if (status === 'pending') {
       statusClass = 'bg-yellow-100 text-yellow-800 font-semibold';
-      statusIcon = '⏳';
+      statusIcon = '<i class="bi bi-hourglass-split"></i>';
     } else if (status === 'processing') {
       statusClass = 'bg-blue-100 text-blue-800 font-semibold';
-      statusIcon = '🔄';
+      statusIcon = '<i class="bi bi-arrow-repeat"></i>';
     } else if (status === 'completed') {
       statusClass = 'bg-green-100 text-green-800';
-      statusIcon = '✅';
+      statusIcon = '<i class="bi bi-check-circle"></i>';
     } else if (status === 'cancelled') {
       statusClass = 'bg-red-100 text-red-800';
-      statusIcon = '❌';
+      statusIcon = '<i class="bi bi-x-circle"></i>';
     }
     
     if (status === 'completed') {
@@ -2075,7 +2086,7 @@ function renderOrders() {
       `₱${o.netTotal.toFixed(2)}`,
       paymentCell,
       (o.createdAt ? formatOrderDate(o.createdAt) : (o.date ? formatOrderDate(o.date) : (o.created_at ? formatOrderDate(o.created_at) : new Date().toLocaleDateString()))),
-      `<span class="px-2 py-1 rounded text-xs ${statusClass}">${statusIcon} ${o.status || '-'}</span>`,
+      `<span class="px-2 py-1 rounded text-xs ${statusClass} flex items-center gap-1">${statusIcon} ${o.status || '-'}</span>`,
       actionsHtml
     ]);
   });
@@ -3575,19 +3586,19 @@ async function checkDatabaseOrders() {
     console.log('Database orders result:', result);
     
     // Show user-friendly database information
-    let message = `📊 Database Summary:\n\n`;
-    message += `📦 Total orders: ${result.totalOrdersInDB}\n`;
-    message += `📅 Today's orders: ${result.todayOrders}\n\n`;
+    let message = `Database Summary:\n\n`;
+    message += `Total orders: ${result.totalOrdersInDB}\n`;
+    message += `Today's orders: ${result.todayOrders}\n\n`;
     
     if (result.recentOrders && result.recentOrders.length > 0) {
-      message += `🕒 Recent Activity:\n`;
+      message += `Recent Activity:\n`;
       result.recentOrders.slice(0, 5).forEach(order => {
         const date = new Date(order.createdAt).toLocaleDateString('en-US', {
           month: 'short',
           day: 'numeric',
           year: 'numeric'
         });
-        const status = order.status === 'Completed' ? '✅' : order.status === 'Pending' ? '⏳' : '📋';
+        const status = order.status === 'Completed' ? 'Completed' : order.status === 'Pending' ? 'Pending' : order.status;
         message += `• ${date} - ₱${order.net_total} ${status}\n`;
       });
     } else {
@@ -3644,9 +3655,9 @@ async function aggregateAllHistoricalSales() {
     console.log('Historical aggregation result:', result);
     
     // Show user-friendly success message
-    let message = `🎉 Successfully processed ${result.processedDays} days of sales data!\n\n`;
+    let message = `Successfully processed ${result.processedDays} days of sales data!\n\n`;
     if (result.results && result.results.length > 0) {
-      message += `📈 Recent Sales Activity:\n`;
+      message += `Recent Sales Activity:\n`;
       result.results.slice(-5).forEach(day => {
         const date = new Date(day.date).toLocaleDateString('en-US', {
           weekday: 'short',
@@ -3659,7 +3670,7 @@ async function aggregateAllHistoricalSales() {
     
     Swal.fire({
       icon: 'success',
-      title: '📊 All Sales Updated!',
+      title: 'All Sales Updated!',
       text: message,
       showConfirmButton: true,
       confirmButtonText: 'OK'
@@ -4138,6 +4149,11 @@ function onDateFilterChange(value) {
   loadDailySalesSummary();
   loadOrdersByDateTable();
   // Analytics will automatically update via loadDailySalesSummary which calls updateSalesAnalytics
+  // Reload top 5 items and chart if analytics section is visible
+  if (!document.getElementById('analyticsSection').classList.contains('hidden')) {
+    loadTop5Items();
+    updateSalesByItemChart();
+  }
 }
 
 // --------------------------- DAILY SALES SUMMARY ---------------------------
@@ -4236,8 +4252,10 @@ async function loadDailySalesSummary() {
     
     // Update analytics section
     updateSalesAnalytics(row, today, isToday, date);
-  } catch (_e) {
-    // ignore
+  } catch (error) {
+    console.error('Error loading daily sales summary:', error);
+    // Still try to update analytics with null data to clear it
+    updateSalesAnalytics(null, null, false, '');
   }
 }
 
@@ -4278,10 +4296,17 @@ async function loadOrdersByDateTable() {
 
 // --------------------------- SALES ANALYTICS ---------------------------
 let comparisonChart = null;
+let salesByItemChart = null;
 
 function initializeComparisonChart() {
   const ctx = document.getElementById('comparisonChart');
   if (!ctx) return;
+  
+  // Destroy existing chart if it exists
+  if (comparisonChart) {
+    comparisonChart.destroy();
+    comparisonChart = null;
+  }
   
   comparisonChart = new Chart(ctx, {
     type: 'bar',
@@ -4306,7 +4331,7 @@ function initializeComparisonChart() {
     },
     options: {
       responsive: true,
-      maintainAspectRatio: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           position: 'top',
@@ -4340,15 +4365,23 @@ function initializeComparisonChart() {
 }
 
 function updateSalesAnalytics(selectedData, todayData, isToday, date) {
+  console.log('updateSalesAnalytics called with:', { selectedData, todayData, isToday, date });
+  
   if (!selectedData) {
     // Clear analytics if no data
-    document.getElementById('analyticsNetSales').textContent = '₱0.00';
-    document.getElementById('analyticsProfit').textContent = '₱0.00';
-    document.getElementById('analyticsMargin').textContent = '0.00%';
-    document.getElementById('analyticsEfficiency').textContent = '0%';
-    document.getElementById('analyticsDateLabel').textContent = '';
-    document.getElementById('performanceBreakdown').innerHTML = '';
-    document.getElementById('analyticsInsights').innerHTML = '<p class="text-gray-500">No data available for analysis.</p>';
+    const analyticsNetSales = document.getElementById('analyticsNetSales');
+    const analyticsProfit = document.getElementById('analyticsProfit');
+    const analyticsMargin = document.getElementById('analyticsMargin');
+    const analyticsDateLabel = document.getElementById('analyticsDateLabel');
+    const performanceBreakdown = document.getElementById('performanceBreakdown');
+    const analyticsInsights = document.getElementById('analyticsInsights');
+    
+    if (analyticsNetSales) analyticsNetSales.textContent = '₱0.00';
+    if (analyticsProfit) analyticsProfit.textContent = '₱0.00';
+    if (analyticsMargin) analyticsMargin.textContent = '0.00%';
+    if (analyticsDateLabel) analyticsDateLabel.textContent = '';
+    if (performanceBreakdown) performanceBreakdown.innerHTML = '';
+    if (analyticsInsights) analyticsInsights.innerHTML = '<p class="text-gray-500">No data available for analysis.</p>';
     return;
   }
 
@@ -4375,54 +4408,67 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
     refunds: Number(todayData.refunds || 0)
   } : null;
 
-  // Update KPI cards
-  document.getElementById('analyticsNetSales').textContent = '₱' + fmt(selected.net_sales);
-  document.getElementById('analyticsProfit').textContent = '₱' + fmt(selected.gross_profit);
-  document.getElementById('analyticsMargin').textContent = fmtPercent(selected.margin_percent) + '%';
+  // Update KPI cards (these elements may not exist in analytics section)
+  const analyticsNetSales = document.getElementById('analyticsNetSales');
+  const analyticsProfit = document.getElementById('analyticsProfit');
+  const analyticsMargin = document.getElementById('analyticsMargin');
+  const analyticsDateLabel = document.getElementById('analyticsDateLabel');
   
-
-
-  // Update date label
-  document.getElementById('analyticsDateLabel').textContent = isToday ? 'Viewing Today\'s Data' : `Comparing ${date} with Today`;
+  if (analyticsNetSales) analyticsNetSales.textContent = '₱' + fmt(selected.net_sales);
+  if (analyticsProfit) analyticsProfit.textContent = '₱' + fmt(selected.gross_profit);
+  if (analyticsMargin) analyticsMargin.textContent = fmtPercent(selected.margin_percent) + '%';
+  if (analyticsDateLabel) analyticsDateLabel.textContent = isToday ? 'Viewing Today\'s Data' : `Comparing ${date} with Today`;
 
   // Update comparison chart
+  if (!comparisonChart) {
+    initializeComparisonChart();
+  }
   if (comparisonChart) {
-    comparisonChart.data.datasets[0].data = [
-      selected.gross_sales,
-      selected.net_sales,
-      selected.gross_profit,
-      selected.cost_of_goods
-    ];
-    comparisonChart.data.datasets[1].data = today ? [
-      today.gross_sales,
-      today.net_sales,
-      today.gross_profit,
-      today.cost_of_goods
-    ] : [0, 0, 0, 0];
-    comparisonChart.update();
+    try {
+      comparisonChart.data.datasets[0].data = [
+        selected.gross_sales,
+        selected.net_sales,
+        selected.gross_profit,
+        selected.cost_of_goods
+      ];
+      comparisonChart.data.datasets[1].data = today ? [
+        today.gross_sales,
+        today.net_sales,
+        today.gross_profit,
+        today.cost_of_goods
+      ] : [0, 0, 0, 0];
+      comparisonChart.update('none'); // Use 'none' mode for smoother updates
+    } catch (error) {
+      console.error('Error updating comparison chart:', error);
+    }
+  } else {
+    console.warn('Comparison chart not initialized');
   }
 
   // Update performance breakdown
   const breakdown = document.getElementById('performanceBreakdown');
+  if (!breakdown) {
+    console.warn('Performance breakdown element not found');
+    return;
+  }
   breakdown.innerHTML = '';
   
   const metrics = [
-    { label: 'Gross Sales', selected: selected.gross_sales, today: today?.gross_sales, icon: '💵' },
-    { label: 'Net Sales', selected: selected.net_sales, today: today?.net_sales, icon: '📊' },
-    { label: 'Gross Profit', selected: selected.gross_profit, today: today?.gross_profit, icon: '💰' },
-    { label: 'Cost of Goods', selected: selected.cost_of_goods, today: today?.cost_of_goods, icon: '📦', reverse: true },
-    { label: 'Discounts', selected: selected.discounts, today: today?.discounts, icon: '🎫', reverse: true },
-    { label: 'Refunds', selected: selected.refunds, today: today?.refunds, icon: '↩️', reverse: true }
+    { label: 'Gross Sales', selected: selected.gross_sales, today: today?.gross_sales, icon: 'bi-cash-stack' },
+    { label: 'Net Sales', selected: selected.net_sales, today: today?.net_sales, icon: 'bi-graph-up' },
+    { label: 'Gross Profit', selected: selected.gross_profit, today: today?.gross_profit, icon: 'bi-cash-coin' },
+    { label: 'Cost of Goods', selected: selected.cost_of_goods, today: today?.cost_of_goods, icon: 'bi-box', reverse: true },
+    { label: 'Discounts', selected: selected.discounts, today: today?.discounts, icon: 'bi-ticket-perforated', reverse: true },
+    { label: 'Refunds', selected: selected.refunds, today: today?.refunds, icon: 'bi-arrow-counterclockwise', reverse: true }
   ];
 
   metrics.forEach(metric => {
-    if (isToday && !today) return;
-    
+    // Always show metrics if we have selected data
     const div = document.createElement('div');
     div.className = 'flex items-center justify-between p-2 bg-white rounded border';
     div.innerHTML = `
       <div class="flex items-center gap-2">
-        <span class="text-lg">${metric.icon}</span>
+        <i class="bi ${metric.icon} text-lg"></i>
         <span class="text-sm font-medium">${metric.label}</span>
       </div>
       <div class="text-right">
@@ -4434,6 +4480,10 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
 
   // Generate insights
   const insights = document.getElementById('analyticsInsights');
+  if (!insights) {
+    console.warn('Analytics insights element not found');
+    return;
+  }
   insights.innerHTML = '';
   
   if (isToday) {
@@ -4450,35 +4500,35 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
   
   // Net Sales insight
   if (selected.net_sales > today.net_sales) {
-    insightsList.push(`✅ <strong>Net Sales</strong> were higher than today, indicating strong performance.`);
+    insightsList.push(`<i class="bi bi-check-circle"></i> <strong>Net Sales</strong> were higher than today, indicating strong performance.`);
   } else if (selected.net_sales < today.net_sales) {
-    insightsList.push(`⚠️ <strong>Net Sales</strong> were lower than today.`);
+    insightsList.push(`<i class="bi bi-exclamation-triangle"></i> <strong>Net Sales</strong> were lower than today.`);
   }
 
   // Profit insight
   if (selected.gross_profit > today.gross_profit) {
-    insightsList.push(`💰 <strong>Gross Profit</strong> was higher, showing better profitability.`);
+    insightsList.push(`<i class="bi bi-cash-coin"></i> <strong>Gross Profit</strong> was higher, showing better profitability.`);
   } else if (selected.gross_profit < today.gross_profit) {
-    insightsList.push(`📉 <strong>Gross Profit</strong> was lower than today.`);
+    insightsList.push(`<i class="bi bi-graph-down-arrow"></i> <strong>Gross Profit</strong> was lower than today.`);
   }
 
   // Margin insight
   if (selected.margin_percent > today.margin_percent) {
-    insightsList.push(`📊 <strong>Profit Margin</strong> was higher, indicating better cost efficiency.`);
+    insightsList.push(`<i class="bi bi-graph-up"></i> <strong>Profit Margin</strong> was higher, indicating better cost efficiency.`);
   } else if (selected.margin_percent < today.margin_percent) {
-    insightsList.push(`📊 <strong>Profit Margin</strong> was lower.`);
+    insightsList.push(`<i class="bi bi-graph-up"></i> <strong>Profit Margin</strong> was lower.`);
   }
 
   // Cost efficiency
   if (selected.cost_of_goods < today.cost_of_goods && selected.net_sales > 0) {
-    insightsList.push(`💡 <strong>Cost of Goods</strong> was lower, showing better inventory management.`);
+    insightsList.push(`<i class="bi bi-lightbulb"></i> <strong>Cost of Goods</strong> was lower, showing better inventory management.`);
   } else if (selected.cost_of_goods > today.cost_of_goods) {
-    insightsList.push(`⚠️ <strong>Cost of Goods</strong> was higher, which may have impacted profitability.`);
+    insightsList.push(`<i class="bi bi-exclamation-triangle"></i> <strong>Cost of Goods</strong> was higher, which may have impacted profitability.`);
   }
 
   // Discount analysis
   if (selected.discounts > today.discounts) {
-    insightsList.push(`🎫 <strong>Discounts</strong> were higher, potentially driving more sales volume.`);
+    insightsList.push(`<i class="bi bi-ticket-perforated"></i> <strong>Discounts</strong> were higher, potentially driving more sales volume.`);
   }
 
 
@@ -4499,6 +4549,298 @@ async function fetchAllProducts() {
   const rp = await fetch(`${window.APP_CONFIG.API_BASE_URL}/products/lazy/public`);
   if (rp.ok) { const j2 = await rp.json(); return j2.products || []; }
   return [];
+}
+
+// --------------------------- TOP 5 ITEMS & SALES BY ITEM CHART ---------------------------
+async function loadTop5Items() {
+  try {
+    // Fetch orders to calculate top items by sales
+    let ordersRes;
+    try {
+      ordersRes = await apiFetch('/orders?page=1&pageSize=1000');
+    } catch (_e) {
+      const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=1000`);
+      if (!r.ok) throw new Error('orders');
+      ordersRes = await r.json();
+    }
+
+    const allOrders = ordersRes.orders || [];
+    
+    // Calculate item sales from order items
+    const itemSalesMap = new Map();
+    
+    for (const order of allOrders) {
+      // Fetch order items
+      let items = [];
+      try {
+        const itemsRes = await apiFetch(`/orders/${order.id}/items`);
+        items = itemsRes.items || [];
+      } catch (_eItemsAuth) {
+        try {
+          const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${order.id}/items/public`);
+          if (r.ok) {
+            const j = await r.json();
+            items = j.items || [];
+          }
+        } catch (_) {}
+      }
+      
+      // Aggregate sales by product name
+      items.forEach(item => {
+        const productName = item.product_name || item.name || 'Unknown Product';
+        const quantity = Number(item.quantity || 0);
+        const totalPrice = Number(item.total_price || quantity * (item.unit_price || item.price || 0));
+        
+        if (itemSalesMap.has(productName)) {
+          const existing = itemSalesMap.get(productName);
+          existing.itemsSold += quantity;
+          existing.netSales += totalPrice;
+        } else {
+          itemSalesMap.set(productName, {
+            name: productName,
+            itemsSold: quantity,
+            netSales: totalPrice
+          });
+        }
+      });
+    }
+    
+    // Get top 5 items by net sales
+    const top5Items = Array.from(itemSalesMap.values())
+      .sort((a, b) => b.netSales - a.netSales)
+      .slice(0, 5);
+    
+    // Display top 5 items in table format
+    const top5List = document.getElementById('top5ItemsList');
+    if (top5List) {
+      if (top5Items.length === 0) {
+        top5List.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500 text-sm">No sales data available</td></tr>';
+      } else {
+        top5List.innerHTML = top5Items.map((item) => `
+          <tr class="border-b hover:bg-gray-50">
+            <td class="py-2 px-2">${item.name || 'Unknown Product'}</td>
+            <td class="py-2 px-2 text-right">${Number(item.itemsSold || 0).toLocaleString('en-US')}</td>
+            <td class="py-2 px-2 text-right font-semibold">₱${Number(item.netSales || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+          </tr>
+        `).join('');
+      }
+    }
+    
+    // Store top 5 items for chart use
+    window.top5ItemsData = top5Items;
+    
+    // Update chart if it exists
+    if (salesByItemChart) {
+      updateSalesByItemChart();
+    }
+  } catch (error) {
+    console.error('Error loading top 5 items:', error);
+    const top5List = document.getElementById('top5ItemsList');
+    if (top5List) {
+      top5List.innerHTML = '<p class="text-gray-500 text-sm">Error loading data</p>';
+    }
+  }
+}
+
+function initializeSalesByItemChart() {
+  const ctx = document.getElementById('salesByItemChart');
+  if (!ctx) return;
+  
+  // Destroy existing chart if it exists
+  if (salesByItemChart) {
+    salesByItemChart.destroy();
+  }
+  
+  const colors = ['#9CA3AF', '#86EFAC', '#93C5FD', '#F9A8D4', '#FDE047']; // Grey, Light Green, Light Blue, Pink, Yellow
+  
+  salesByItemChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: []
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display: false
+        },
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              return context.dataset.label + ': ₱' + Number(context.parsed.y).toLocaleString('en-US', {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              });
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: {
+            font: {
+              size: 10
+            },
+            maxRotation: 45,
+            minRotation: 45
+          }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: {
+            font: {
+              size: 10
+            },
+            callback: function(value) {
+              return '₱' + Number(value).toLocaleString('en-US', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+              });
+            }
+          }
+        }
+      }
+    }
+  });
+  
+  updateSalesByItemChart();
+}
+
+async function updateSalesByItemChart() {
+  if (!salesByItemChart) {
+    initializeSalesByItemChart();
+    return;
+  }
+  
+  try {
+    const days = parseInt(document.getElementById('salesChartDays')?.value || '30');
+    const chartType = document.getElementById('salesChartType')?.value || 'bar';
+    
+    // Update chart type
+    salesByItemChart.config.type = chartType;
+    
+    // Fetch orders for the specified period
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    
+    let ordersRes;
+    try {
+      ordersRes = await apiFetch(`/orders?page=1&pageSize=1000`);
+    } catch (_e) {
+      const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=1000`);
+      if (!r.ok) throw new Error('orders');
+      ordersRes = await r.json();
+    }
+
+    const allOrders = (ordersRes.orders || []).filter(order => {
+      if (!order.createdAt) return false;
+      const orderDate = new Date(order.createdAt);
+      return orderDate >= startDate && orderDate <= endDate;
+    });
+    
+    // Get top 5 items if not already loaded
+    if (!window.top5ItemsData || window.top5ItemsData.length === 0) {
+      await loadTop5Items();
+    }
+    
+    const top5Items = window.top5ItemsData || [];
+    if (top5Items.length === 0) {
+      salesByItemChart.data.labels = [];
+      salesByItemChart.data.datasets = [];
+      salesByItemChart.update();
+      return;
+    }
+    
+    const colors = ['#9CA3AF', '#86EFAC', '#93C5FD', '#F9A8D4', '#FDE047'];
+    
+    // Group orders by date
+    const dateMap = new Map();
+    
+    // Initialize date map for all days in range
+    for (let i = 0; i < days; i++) {
+      const d = new Date(startDate);
+      d.setDate(d.getDate() + i);
+      const dateKey = d.toISOString().slice(0, 10);
+      const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      dateMap.set(dateKey, {
+        date: dateKey,
+        label: dateLabel,
+        items: new Map()
+      });
+    }
+    
+    // Process orders and aggregate sales by item and date
+    for (const order of allOrders) {
+      const orderDate = new Date(order.createdAt);
+      const dateKey = orderDate.toISOString().slice(0, 10);
+      
+      if (!dateMap.has(dateKey)) continue;
+      
+      const dayData = dateMap.get(dateKey);
+      
+      // Fetch order items
+      let items = [];
+      try {
+        const itemsRes = await apiFetch(`/orders/${order.id}/items`);
+        items = itemsRes.items || [];
+      } catch (_eItemsAuth) {
+        try {
+          const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${order.id}/items/public`);
+          if (r.ok) {
+            const j = await r.json();
+            items = j.items || [];
+          }
+        } catch (_) {}
+      }
+      
+      // Aggregate sales by product name for this day
+      items.forEach(item => {
+        const productName = item.product_name || item.name || 'Unknown Product';
+        const totalPrice = Number(item.total_price || (item.quantity || 0) * (item.unit_price || item.price || 0));
+        
+        // Only track top 5 items
+        const top5Item = top5Items.find(t => t.name === productName);
+        if (top5Item) {
+          if (dayData.items.has(productName)) {
+            dayData.items.set(productName, dayData.items.get(productName) + totalPrice);
+          } else {
+            dayData.items.set(productName, totalPrice);
+          }
+        }
+      });
+    }
+    
+    // Prepare chart data
+    const sortedDates = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    const labels = sortedDates.map(d => d.label);
+    
+    // Create datasets for each top 5 item
+    const datasets = top5Items.map((item, index) => {
+      const data = sortedDates.map(dayData => {
+        return dayData.items.get(item.name) || 0;
+      });
+      
+      return {
+        label: item.name,
+        data: data,
+        backgroundColor: colors[index],
+        borderColor: colors[index],
+        borderWidth: 1
+      };
+    });
+    
+    // Update chart
+    salesByItemChart.data.labels = labels;
+    salesByItemChart.data.datasets = datasets;
+    salesByItemChart.update();
+  } catch (error) {
+    console.error('Error updating sales by item chart:', error);
+  }
 }
 
 // --------------------------- LOGOUT FUNCTION ---------------------------
