@@ -3006,6 +3006,7 @@ function renderSuppliers() {
         { title: 'Contact' },
         { title: 'Items Supplied' },
         { title: 'Last Delivery' },
+        { title: 'Last Order' },
         { title: 'Actions', orderable: false }
       ]
     });
@@ -3028,6 +3029,7 @@ function renderSuppliers() {
       s.contact,
       (s.items || []).join(', '),
       fmtDate(s.lastDelivery),
+      fmtDate(s.lastOrderDate),
       `<button onclick="editSupplier(${i})" class="text-blue-600">Edit</button>
        <button onclick="deleteSupplier(${i})" class="text-red-600 ml-2">Delete</button>`
     ]);
@@ -3044,6 +3046,7 @@ function openAddSupplierModal() {
   document.getElementById('supplierContact').value = '';
   document.getElementById('supplierItems').value = '';
   document.getElementById('supplierLastDelivery').value = '';
+  document.getElementById('supplierLastOrderDate').value = '';
   const modal = document.getElementById('supplierModal');
   console.log('Supplier modal element:', modal);
   if (modal) {
@@ -3061,8 +3064,15 @@ function exportSuppliersCSV() {
       .then(r => r.json())
       .then(data => {
         const list = (data.suppliers || []);
-        const rows = list.map(s => [ s.id, s.name, s.contact || '', (s.items||[]).join('; '), s.last_delivery || s.lastDelivery || '' ]);
-        const header = ['ID','Supplier','Contact','Items','Last Delivery'];
+        const rows = list.map(s => [
+          s.id,
+          s.name,
+          s.contact || '',
+          (s.items || []).join('; '),
+          s.last_delivery || s.lastDelivery || '',
+          s.last_order_date || s.lastOrderDate || ''
+        ]);
+        const header = ['ID','Supplier','Contact','Items','Last Delivery','Last Order'];
         const csv = [header].concat(rows)
           .map(r => r.map(v => String(v).replace(/"/g,'""')).map(v=>`"${v}"`).join(','))
           .join('\n');
@@ -3096,11 +3106,21 @@ function exportSuppliersPDF() {
 function editSupplier(i) {
   editSupplierIndex = i;
   const s = suppliers[i];
+
+  // Helper to convert stored date value (Date/string) to yyyy-MM-dd for <input type="date">
+  const toInputDate = (value) => {
+    if (!value) return '';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toISOString().slice(0, 10);
+  };
+
   document.getElementById('supplierModalTitle').innerText = 'Edit Supplier';
   document.getElementById('supplierName').value = s.name;
   document.getElementById('supplierContact').value = s.contact;
   document.getElementById('supplierItems').value = (s.items || []).join(', ');
-  document.getElementById('supplierLastDelivery').value = s.lastDelivery || '';
+  document.getElementById('supplierLastDelivery').value = toInputDate(s.lastDelivery);
+  document.getElementById('supplierLastOrderDate').value = toInputDate(s.lastOrderDate);
   document.getElementById('supplierModal').classList.remove('hidden');
 }
 
@@ -3109,12 +3129,13 @@ function saveSupplier() {
   const contact = document.getElementById('supplierContact').value.trim();
   const itemsRaw = document.getElementById('supplierItems').value.trim();
   const lastDelivery = document.getElementById('supplierLastDelivery').value || '';
+  const lastOrderDate = document.getElementById('supplierLastOrderDate').value || '';
 
   if (!name) { Swal.fire({ icon: 'warning', title: 'Supplier name required' }); return; }
 
   const items = itemsRaw ? itemsRaw.split(',').map(it => it.trim()).filter(Boolean) : [];
 
-  const supplierObj = { name, contact, items, lastDelivery };
+  const supplierObj = { name, contact, items, lastDelivery, lastOrderDate };
 
   if (editSupplierIndex !== null) {
     const existing = suppliers[editSupplierIndex] || {};
@@ -3122,14 +3143,15 @@ function saveSupplier() {
     suppliers[editSupplierIndex] = Object.assign({}, existing, supplierObj);
     localStorage.setItem('suppliers', JSON.stringify(suppliers));
     if (id) {
-      apiFetch(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify({ name, contact, lastDelivery }) })
+      apiFetch(`/suppliers/${id}`, { method: 'PATCH', body: JSON.stringify({ name, contact, lastDelivery, lastOrderDate }) })
         .then(res => {
           const updated = res.supplier || {};
           suppliers[editSupplierIndex] = Object.assign({}, suppliers[editSupplierIndex], {
             id: updated.id,
             name: updated.name,
             contact: updated.contact,
-            lastDelivery: updated.last_delivery || updated.lastDelivery || ''
+          lastDelivery: updated.last_delivery || updated.lastDelivery || '',
+          lastOrderDate: updated.last_order_date || updated.lastOrderDate || ''
           });
           localStorage.setItem('suppliers', JSON.stringify(suppliers));
           renderSuppliers();
@@ -3963,7 +3985,14 @@ async function loadFromBackend() {
     // Products are now loaded via DataTables server-side pagination
     // No need to load them here
 
-    suppliers = (suppliersRes.suppliers || []).map(s => ({ id: s.id, name: s.name, contact: s.contact, items: s.items || [], lastDelivery: s.last_delivery || null }));
+    suppliers = (suppliersRes.suppliers || []).map(s => ({
+      id: s.id,
+      name: s.name,
+      contact: s.contact,
+      items: s.items || [],
+      lastDelivery: s.last_delivery || null,
+      lastOrderDate: s.last_order_date || null
+    }));
     orders = (ordersRes.orders || []).map(o => ({ 
       id: o.id, 
       displayId: o.order_code || `ORD${o.id}`, 
@@ -4125,7 +4154,14 @@ async function refreshInventoryOnly() {
 // Refresh only suppliers
 async function refreshSuppliersOnly() {
   const suppliersRes = await apiFetch('/suppliers');
-  suppliers = (suppliersRes.suppliers || []).map(s => ({ id: s.id, name: s.name, contact: s.contact, items: s.items || [], lastDelivery: s.last_delivery || null }));
+  suppliers = (suppliersRes.suppliers || []).map(s => ({
+    id: s.id,
+    name: s.name,
+    contact: s.contact,
+    items: s.items || [],
+    lastDelivery: s.last_delivery || null,
+    lastOrderDate: s.last_order_date || null
+  }));
   localStorage.setItem('suppliers', JSON.stringify(suppliers));
   renderSuppliers();
 }
