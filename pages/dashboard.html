@@ -120,15 +120,15 @@
           <div class="flex justify-between items-center mb-4">
             <h3 class="font-semibold">Sales Overview</h3>
             <div class="flex gap-2">
-              <button onclick="aggregateTodaySales()" class="bg-green-500 text-white px-4 py-2 rounded text-sm hover:bg-green-600 flex items-center gap-2">
+              <button onclick="aggregateTodaySales()" class="bg-green-500 text-white px-3 py-1.5 rounded text-xs hover:bg-green-600 flex items-center gap-1.5">
                 <i class="bi bi-arrow-repeat"></i>
                 <span>Update Today's Sales</span>
               </button>
-              <button onclick="aggregateAllHistoricalSales()" class="bg-purple-500 text-white px-4 py-2 rounded text-sm hover:bg-purple-600 flex items-center gap-2">
+              <button onclick="aggregateAllHistoricalSales()" class="bg-purple-500 text-white px-3 py-1.5 rounded text-xs hover:bg-purple-600 flex items-center gap-1.5">
                 <i class="bi bi-graph-up"></i>
                 <span>Update All Sales</span>
               </button>
-              <button onclick="checkDatabaseOrders()" class="bg-blue-500 text-white px-4 py-2 rounded text-sm hover:bg-blue-600 flex items-center gap-2">
+              <button onclick="checkDatabaseOrders()" class="bg-blue-500 text-white px-3 py-1.5 rounded text-xs hover:bg-blue-600 flex items-center gap-1.5">
                 <i class="bi bi-search"></i>
                 <span>Check Database</span>
               </button>
@@ -156,14 +156,14 @@
           </div>
           <table class="w-full text-sm text-gray-700">
             <tbody>
-              <tr><td class="py-1">Gross Sales</td><td class="py-1 text-right"><span id="dsGrossChange" class="text-xs mr-1"></span>₱<span id="dsGross">0.00</span></td></tr>
-              <tr><td class="py-1">Refunds</td><td class="py-1 text-right"><span id="dsRefundsChange" class="text-xs mr-1"></span>₱<span id="dsRefunds">0.00</span></td></tr>
-              <tr><td class="py-1">Discounts</td><td class="py-1 text-right"><span id="dsDiscountsChange" class="text-xs mr-1"></span>₱<span id="dsDiscounts">0.00</span></td></tr>
-              <tr class="font-semibold"><td class="py-1">Net Sales</td><td class="py-1 text-right"><span id="dsNetChange" class="text-xs mr-1"></span>₱<span id="dsNet">0.00</span></td></tr>
-              <tr><td class="py-1">Cost of Goods</td><td class="py-1 text-right"><span id="dsCogsChange" class="text-xs mr-1"></span>₱<span id="dsCogs">0.00</span></td></tr>
-              <tr><td class="py-1">Gross Profit</td><td class="py-1 text-right"><span id="dsProfitChange" class="text-xs mr-1"></span>₱<span id="dsProfit">0.00</span></td></tr>
-              <tr><td class="py-1">Margin</td><td class="py-1 text-right"><span id="dsMarginChange" class="text-xs mr-1"></span><span id="dsMargin">0.00</span>%</td></tr>
-              <tr><td class="py-1">Taxes</td><td class="py-1 text-right"><span id="dsTaxesChange" class="text-xs mr-1"></span>₱<span id="dsTaxes">0.00</span></td></tr>
+              <tr><td class="py-1">Gross Sales</td><td class="py-1 text-right">₱<span id="dsGross">0.00</span></td></tr>
+              <tr><td class="py-1">Refunds</td><td class="py-1 text-right">₱<span id="dsRefunds">0.00</span></td></tr>
+              <tr><td class="py-1">Discounts</td><td class="py-1 text-right">₱<span id="dsDiscounts">0.00</span></td></tr>
+              <tr class="font-semibold"><td class="py-1">Net Sales</td><td class="py-1 text-right">₱<span id="dsNet">0.00</span></td></tr>
+              <tr><td class="py-1">Cost of Goods</td><td class="py-1 text-right">₱<span id="dsCogs">0.00</span></td></tr>
+              <tr><td class="py-1">Gross Profit</td><td class="py-1 text-right">₱<span id="dsProfit">0.00</span></td></tr>
+              <tr><td class="py-1">Margin</td><td class="py-1 text-right"><span id="dsMargin">0.00</span>%</td></tr>
+              <tr><td class="py-1">Taxes</td><td class="py-1 text-right">₱<span id="dsTaxes">0.00</span></td></tr>
             </tbody>
           </table>
           <p id="dsEmpty" class="text-xs text-gray-500 mt-2 hidden">No summary for this date.</p>
@@ -200,27 +200,27 @@
 
     </section>
 
-    <!-- SALES ANALYTICS & COMPARISON -->
+    <!-- SALES ANALYTICS -->
     <section id="analyticsSection" class="hidden">
       <div class="bg-white p-4 rounded-lg shadow mb-6">
         <div class="flex justify-between items-center mb-4">
-          <h2 class="text-lg font-semibold">Sales Analytics & Comparison</h2>
+          <h2 class="text-lg font-semibold">Sales Analytics</h2>
           <div class="flex items-center gap-4">
             <label class="text-sm text-gray-600">Filter Date:</label>
             <input type="date" id="analyticsDateFilter" class="border rounded px-3 py-2" title="Filter by date" onchange="onDateFilterChange(this.value)">
-            <button onclick="onDateFilterChange('')" class="bg-gray-400 text-white px-3 py-2 rounded text-sm hover:bg-gray-500" title="Clear date filter">Clear</button>
+            <button onclick="onDateFilterChange('')" class="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600" title="Clear date filter">Clear</button>
             <span id="analyticsDateLabel" class="text-xs text-gray-500"></span>
-            <button onclick="showSection('dashboardSection')" class="bg-gray-500 text-white px-4 py-1 rounded text-sm">Back to Dashboard</button>
+            <button onclick="showSection('dashboardSection')" class="bg-blue-600 text-white px-4 py-1 rounded text-sm hover:bg-blue-700">Back to Dashboard</button>
           </div>
         </div>
       </div>
 
       <div class="bg-white p-4 rounded shadow mb-6">
-        <!-- Sales Comparison and Performance Breakdown (Side by Side) -->
+        <!-- Sales Analytics and Performance Breakdown (Side by Side) -->
         <div class="grid grid-cols-2 gap-4 mb-6">
-          <!-- Sales Comparison Chart (Left) -->
+          <!-- Sales Analytics Chart (Left) -->
           <div class="bg-white p-4 rounded shadow">
-            <h4 class="font-semibold mb-3 text-sm">Sales Comparison</h4>
+            <h4 class="font-semibold mb-3 text-sm">Sales Analytics</h4>
             <div class="relative" style="height: 300px;">
               <canvas id="comparisonChart"></canvas>
             </div>
@@ -251,7 +251,10 @@
       <div class="grid grid-cols-2 gap-4 mb-6">
         <!-- Top 5 Items (Left) -->
         <div class="bg-gray-50 p-4 rounded-lg">
-          <h4 class="font-semibold mb-3 text-sm">Top 5 items</h4>
+          <div class="flex items-center justify-between mb-3">
+            <h4 class="font-semibold text-sm">Top 5 items</h4>
+            <span id="top5DateLabel" class="text-xs text-gray-500"></span>
+          </div>
           <div class="overflow-x-auto">
             <table class="min-w-full text-sm">
               <thead>
@@ -276,11 +279,6 @@
               <select id="salesChartType" class="border rounded px-2 py-1 text-xs" title="Chart Type" onchange="updateSalesByItemChart()">
                 <option value="bar">Bar</option>
                 <option value="line">Line</option>
-              </select>
-              <select id="salesChartDays" class="border rounded px-2 py-1 text-xs" title="Time Period" onchange="updateSalesByItemChart()">
-                <option value="7">7 Days</option>
-                <option value="14">14 Days</option>
-                <option value="30" selected>30 Days</option>
               </select>
             </div>
           </div>

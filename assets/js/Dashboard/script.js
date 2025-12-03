@@ -4271,63 +4271,12 @@ async function loadDailySalesSummary() {
     const has = (data.rows && data.rows.length);
     document.getElementById('dsEmpty').classList.toggle('hidden', !!has);
     const row = has ? data.rows[0] : null;
-    const today = data.todayData || null;
     const isToday = data.isToday || false;
     
-    // Update date label to show comparison context
-    const dateLabel = isToday ? `${date} (Today)` : `${date} vs Today`;
+    // Update date label to show selected date context
+    const dateLabel = isToday ? `${date} (Today)` : `${date}`;
     document.getElementById('dsDate').textContent = dateLabel;
     const fmt = (n) => (Number(n || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    
-    // Helper function to calculate and display change
-    const displayChange = (selectedValue, todayValue, elementId, isPercent = false, reverseColor = false) => {
-      // Don't show comparison if selected date is today
-      if (isToday) {
-        const changeElement = document.getElementById(elementId);
-        changeElement.textContent = '';
-        changeElement.className = 'text-xs mr-1';
-        return;
-      }
-      
-      const selected = Number(selectedValue || 0);
-      const todayVal = Number(todayValue || 0);
-      const change = selected - todayVal;
-      const changeElement = document.getElementById(elementId);
-      
-      if (!today || change === 0) {
-        changeElement.textContent = '';
-        changeElement.className = 'text-xs mr-1';
-        return;
-      }
-      
-      const isIncrease = change > 0;
-      // Calculate percentage change, handling division by zero
-      let changePercent = 0;
-      let showPercent = true;
-      if (todayVal !== 0) {
-        changePercent = (change / todayVal) * 100;
-      } else if (selected !== 0) {
-        // If today was 0 and selected date is not, show "New" instead of percentage
-        showPercent = false;
-      }
-      
-      // For refunds, discounts, and cost of goods, reverse the color logic
-      // Note: When comparing selected date vs today, we want to show if selected date is better than today
-      const isGood = reverseColor ? !isIncrease : isIncrease;
-      
-      if (isPercent) {
-        // For margin, show percentage point change
-        changeElement.textContent = `${isIncrease ? '+' : ''}${change.toFixed(2)}pp`;
-      } else if (!showPercent && todayVal === 0 && selected !== 0) {
-        // Show "New" when today was 0 and selected date has a value
-        changeElement.textContent = 'New';
-      } else {
-        // For monetary values, show percentage change
-        changeElement.textContent = `${isIncrease ? '+' : ''}${changePercent.toFixed(1)}%`;
-      }
-      
-      changeElement.className = `text-xs mr-1 font-semibold ${isGood ? 'text-green-600' : 'text-red-600'}`;
-    };
     
     // Display values
     document.getElementById('dsGross').textContent = fmt(row?.gross_sales);
@@ -4338,23 +4287,9 @@ async function loadDailySalesSummary() {
     document.getElementById('dsProfit').textContent = fmt(row?.gross_profit);
     document.getElementById('dsMargin').textContent = (Number(row?.margin_percent || 0)).toFixed(2);
     document.getElementById('dsTaxes').textContent = fmt(row?.taxes);
-    
-    // Display changes (comparing selected date vs today)
-    // For sales, profit, net sales: higher than today is good (green)
-    displayChange(row?.gross_sales, today?.gross_sales, 'dsGrossChange');
-    displayChange(row?.net_sales, today?.net_sales, 'dsNetChange');
-    displayChange(row?.gross_profit, today?.gross_profit, 'dsProfitChange');
-    // For refunds, discounts, cost of goods: lower than today is good (green)
-    displayChange(row?.refunds, today?.refunds, 'dsRefundsChange', false, true);
-    displayChange(row?.discounts, today?.discounts, 'dsDiscountsChange', false, true);
-    displayChange(row?.cost_of_goods, today?.cost_of_goods, 'dsCogsChange', false, true);
-    // For margin, we compare the percentage points (higher than today is good)
-    displayChange(row?.margin_percent, today?.margin_percent, 'dsMarginChange', true);
-    // For taxes, lower than today is good (green)
-    displayChange(row?.taxes, today?.taxes, 'dsTaxesChange', false, true);
-    
+        
     // Update analytics section
-    updateSalesAnalytics(row, today, isToday, date);
+    updateSalesAnalytics(row, null, isToday, date);
   } catch (error) {
     console.error('Error loading daily sales summary:', error);
     // Still try to update analytics with null data to clear it
@@ -4411,22 +4346,16 @@ function initializeComparisonChart() {
     comparisonChart = null;
   }
   
+  // Single-series chart for analytics (no comparison)
   comparisonChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: ['Gross Sales', 'Net Sales', 'Gross Profit', 'Cost of Goods'],
       datasets: [
         {
-          label: 'Selected Date',
+          label: 'Sales',
           backgroundColor: 'rgba(59, 130, 246, 0.7)',
           borderColor: 'rgb(59, 130, 246)',
-          borderWidth: 1,
-          data: [0, 0, 0, 0]
-        },
-        {
-          label: 'Today',
-          backgroundColor: 'rgba(16, 185, 129, 0.7)',
-          borderColor: 'rgb(16, 185, 129)',
           borderWidth: 1,
           data: [0, 0, 0, 0]
         }
@@ -4437,12 +4366,12 @@ function initializeComparisonChart() {
       maintainAspectRatio: false,
       plugins: {
         legend: {
-          position: 'top',
+          display: false
         },
         tooltip: {
           callbacks: {
             label: function(context) {
-              return context.dataset.label + ': ₱' + Number(context.parsed.y).toLocaleString('en-US', {
+              return '₱' + Number(context.parsed.y).toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
               });
@@ -4501,15 +4430,8 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
     refunds: Number(selectedData.refunds || 0)
   };
 
-  const today = todayData ? {
-    gross_sales: Number(todayData.gross_sales || 0),
-    net_sales: Number(todayData.net_sales || 0),
-    gross_profit: Number(todayData.gross_profit || 0),
-    cost_of_goods: Number(todayData.cost_of_goods || 0),
-    margin_percent: Number(todayData.margin_percent || 0),
-    discounts: Number(todayData.discounts || 0),
-    refunds: Number(todayData.refunds || 0)
-  } : null;
+  // todayData is no longer used for comparison; we keep the parameter
+  // to avoid changing other call sites.
 
   // Update KPI cards (these elements may not exist in analytics section)
   const analyticsNetSales = document.getElementById('analyticsNetSales');
@@ -4520,9 +4442,12 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
   if (analyticsNetSales) analyticsNetSales.textContent = '₱' + fmt(selected.net_sales);
   if (analyticsProfit) analyticsProfit.textContent = '₱' + fmt(selected.gross_profit);
   if (analyticsMargin) analyticsMargin.textContent = fmtPercent(selected.margin_percent) + '%';
-  if (analyticsDateLabel) analyticsDateLabel.textContent = isToday ? 'Viewing Today\'s Data' : `Comparing ${date} with Today`;
+  if (analyticsDateLabel) {
+    const labelDate = date || (isToday ? 'Today' : '');
+    analyticsDateLabel.textContent = labelDate ? `Viewing ${labelDate} Sales Analytics` : '';
+  }
 
-  // Update comparison chart
+  // Update analytics chart (single series)
   if (!comparisonChart) {
     initializeComparisonChart();
   }
@@ -4534,12 +4459,6 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
         selected.gross_profit,
         selected.cost_of_goods
       ];
-      comparisonChart.data.datasets[1].data = today ? [
-        today.gross_sales,
-        today.net_sales,
-        today.gross_profit,
-        today.cost_of_goods
-      ] : [0, 0, 0, 0];
       comparisonChart.update('none'); // Use 'none' mode for smoother updates
     } catch (error) {
       console.error('Error updating comparison chart:', error);
@@ -4557,12 +4476,12 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
   breakdown.innerHTML = '';
   
   const metrics = [
-    { label: 'Gross Sales', selected: selected.gross_sales, today: today?.gross_sales, icon: 'bi-cash-stack' },
-    { label: 'Net Sales', selected: selected.net_sales, today: today?.net_sales, icon: 'bi-graph-up' },
-    { label: 'Gross Profit', selected: selected.gross_profit, today: today?.gross_profit, icon: 'bi-cash-coin' },
-    { label: 'Cost of Goods', selected: selected.cost_of_goods, today: today?.cost_of_goods, icon: 'bi-box', reverse: true },
-    { label: 'Discounts', selected: selected.discounts, today: today?.discounts, icon: 'bi-ticket-perforated', reverse: true },
-    { label: 'Refunds', selected: selected.refunds, today: today?.refunds, icon: 'bi-arrow-counterclockwise', reverse: true }
+    { label: 'Gross Sales', value: selected.gross_sales, icon: 'bi-cash-stack' },
+    { label: 'Net Sales', value: selected.net_sales, icon: 'bi-graph-up' },
+    { label: 'Gross Profit', value: selected.gross_profit, icon: 'bi-cash-coin' },
+    { label: 'Cost of Goods', value: selected.cost_of_goods, icon: 'bi-box' },
+    { label: 'Discounts', value: selected.discounts, icon: 'bi-ticket-perforated' },
+    { label: 'Refunds', value: selected.refunds, icon: 'bi-arrow-counterclockwise' }
   ];
 
   metrics.forEach(metric => {
@@ -4575,7 +4494,7 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
         <span class="text-sm font-medium">${metric.label}</span>
       </div>
       <div class="text-right">
-        <div class="text-sm font-semibold">₱${fmt(metric.selected)}</div>
+        <div class="text-sm font-semibold">₱${fmt(metric.value)}</div>
       </div>
     `;
     breakdown.appendChild(div);
@@ -4588,52 +4507,35 @@ function updateSalesAnalytics(selectedData, todayData, isToday, date) {
     return;
   }
   insights.innerHTML = '';
-  
-  if (isToday) {
-    insights.innerHTML = '<p class="text-gray-600">Viewing today\'s data. Select a different date to see comparison insights.</p>';
-    return;
-  }
-
-  if (!today) {
-    insights.innerHTML = '<p class="text-gray-600">No data available for today to generate insights.</p>';
-    return;
-  }
 
   const insightsList = [];
-  
-  // Net Sales insight
-  if (selected.net_sales > today.net_sales) {
-    insightsList.push(`<i class="bi bi-check-circle"></i> <strong>Net Sales</strong> were higher than today, indicating strong performance.`);
-  } else if (selected.net_sales < today.net_sales) {
-    insightsList.push(`<i class="bi bi-exclamation-triangle"></i> <strong>Net Sales</strong> were lower than today.`);
+
+  // Basic, single-date insights (no comparison)
+  if (selected.net_sales === 0) {
+    insightsList.push(`<i class="bi bi-info-circle"></i> No net sales recorded for this date.`);
+  } else {
+    insightsList.push(`<i class="bi bi-check-circle"></i> <strong>Net Sales</strong> were ₱${fmt(selected.net_sales)}, showing overall revenue performance for the selected date.`);
   }
 
-  // Profit insight
-  if (selected.gross_profit > today.gross_profit) {
-    insightsList.push(`<i class="bi bi-cash-coin"></i> <strong>Gross Profit</strong> was higher, showing better profitability.`);
-  } else if (selected.gross_profit < today.gross_profit) {
-    insightsList.push(`<i class="bi bi-graph-down-arrow"></i> <strong>Gross Profit</strong> was lower than today.`);
+  if (selected.gross_profit > 0) {
+    insightsList.push(`<i class="bi bi-cash-coin"></i> <strong>Gross Profit</strong> was ₱${fmt(selected.gross_profit)}, indicating the earnings after cost of goods.`);
   }
 
-  // Margin insight
-  if (selected.margin_percent > today.margin_percent) {
-    insightsList.push(`<i class="bi bi-graph-up"></i> <strong>Profit Margin</strong> was higher, indicating better cost efficiency.`);
-  } else if (selected.margin_percent < today.margin_percent) {
-    insightsList.push(`<i class="bi bi-graph-up"></i> <strong>Profit Margin</strong> was lower.`);
+  if (selected.margin_percent > 0) {
+    insightsList.push(`<i class="bi bi-graph-up"></i> <strong>Profit Margin</strong> was ${fmtPercent(selected.margin_percent)}%, reflecting cost efficiency for this date.`);
   }
 
-  // Cost efficiency
-  if (selected.cost_of_goods < today.cost_of_goods && selected.net_sales > 0) {
-    insightsList.push(`<i class="bi bi-lightbulb"></i> <strong>Cost of Goods</strong> was lower, showing better inventory management.`);
-  } else if (selected.cost_of_goods > today.cost_of_goods) {
-    insightsList.push(`<i class="bi bi-exclamation-triangle"></i> <strong>Cost of Goods</strong> was higher, which may have impacted profitability.`);
+  if (selected.cost_of_goods > 0 && selected.net_sales > 0) {
+    insightsList.push(`<i class="bi bi-lightbulb"></i> <strong>Cost of Goods</strong> was ₱${fmt(selected.cost_of_goods)}, which may impact profitability depending on pricing.`);
   }
 
-  // Discount analysis
-  if (selected.discounts > today.discounts) {
-    insightsList.push(`<i class="bi bi-ticket-perforated"></i> <strong>Discounts</strong> were higher, potentially driving more sales volume.`);
+  if (selected.discounts > 0) {
+    insightsList.push(`<i class="bi bi-ticket-perforated"></i> <strong>Discounts</strong> totaled ₱${fmt(selected.discounts)}, which may have helped drive sales volume.`);
   }
 
+  if (selected.refunds > 0) {
+    insightsList.push(`<i class="bi bi-arrow-counterclockwise"></i> <strong>Refunds</strong> amounted to ₱${fmt(selected.refunds)}.`);
+  }
 
   insightsList.forEach(insight => {
     const p = document.createElement('p');
@@ -4669,10 +4571,18 @@ async function loadTop5Items() {
 
     const allOrders = ordersRes.orders || [];
     
-    // Calculate item sales from order items
+    // Use the active date filter (or today if none) to scope Top 5 items
+    const targetDate = (activeDateFilter || new Date().toISOString().slice(0, 10));
+    const filteredOrders = allOrders.filter(order => {
+      if (!order.createdAt) return false;
+      // Compare by YYYY-MM-DD
+      return order.createdAt.toString().slice(0, 10) === targetDate;
+    });
+    
+    // Calculate item sales from order items (product + variant)
     const itemSalesMap = new Map();
     
-    for (const order of allOrders) {
+    for (const order of filteredOrders) {
       // Fetch order items
       let items = [];
       try {
@@ -4688,19 +4598,42 @@ async function loadTop5Items() {
         } catch (_) {}
       }
       
-      // Aggregate sales by product name
+      // Aggregate sales by product + variant
       items.forEach(item => {
-        const productName = item.product_name || item.name || 'Unknown Product';
+        // Base product name
+        let baseName = item.product_name ||
+                       item.name ||
+                       (item.product_id && item.product_id.name) ||
+                       (item.product_details && item.product_details.name) ||
+                       'Unknown Product';
+
+        // Variant name (if any)
+        let variantName = item.variant_name || null;
+
+        // If variant_name not set but baseName already includes variant in parentheses, split it
+        if (!variantName && baseName.includes(' (')) {
+          const match = baseName.match(/^(.+?)\s*\((.+?)\)$/);
+          if (match) {
+            baseName = match[1].trim();
+            variantName = match[2].trim();
+          }
+        }
+
+        const key = variantName ? `${baseName}|||${variantName}` : baseName;
+        const displayName = variantName ? `${baseName} (${variantName})` : baseName;
+
         const quantity = Number(item.quantity || 0);
         const totalPrice = Number(item.total_price || quantity * (item.unit_price || item.price || 0));
         
-        if (itemSalesMap.has(productName)) {
-          const existing = itemSalesMap.get(productName);
+        if (itemSalesMap.has(key)) {
+          const existing = itemSalesMap.get(key);
           existing.itemsSold += quantity;
           existing.netSales += totalPrice;
         } else {
-          itemSalesMap.set(productName, {
-            name: productName,
+          itemSalesMap.set(key, {
+            name: displayName,
+            baseName,
+            variantName,
             itemsSold: quantity,
             netSales: totalPrice
           });
@@ -4715,9 +4648,16 @@ async function loadTop5Items() {
     
     // Display top 5 items in table format
     const top5List = document.getElementById('top5ItemsList');
+    const top5DateLabel = document.getElementById('top5DateLabel');
+    if (top5DateLabel) {
+      const d = new Date(targetDate);
+      top5DateLabel.textContent = isNaN(d.getTime())
+        ? ''
+        : d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
     if (top5List) {
       if (top5Items.length === 0) {
-        top5List.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500 text-sm">No sales data available</td></tr>';
+        top5List.innerHTML = '<tr><td colspan="3" class="text-center py-4 text-gray-500 text-sm">No sales data for this date</td></tr>';
       } else {
         top5List.innerHTML = top5Items.map((item) => `
           <tr class="border-b hover:bg-gray-50">
@@ -4754,8 +4694,6 @@ function initializeSalesByItemChart() {
     salesByItemChart.destroy();
   }
   
-  const colors = ['#9CA3AF', '#86EFAC', '#93C5FD', '#F9A8D4', '#FDE047']; // Grey, Light Green, Light Blue, Pink, Yellow
-  
   salesByItemChart = new Chart(ctx, {
     type: 'bar',
     data: {
@@ -4772,17 +4710,17 @@ function initializeSalesByItemChart() {
         tooltip: {
           callbacks: {
             label: function(context) {
-              return context.dataset.label + ': ₱' + Number(context.parsed.y).toLocaleString('en-US', {
+              const label = context.dataset.label ? `${context.dataset.label}: ` : '';
+              return `${label}₱${Number(context.parsed.y).toLocaleString('en-US', {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2
-              });
+              })}`;
             }
           }
         }
       },
       scales: {
         x: {
-          stacked: true,
           ticks: {
             font: {
               size: 10
@@ -4792,7 +4730,6 @@ function initializeSalesByItemChart() {
           }
         },
         y: {
-          stacked: true,
           beginAtZero: true,
           ticks: {
             font: {
@@ -4813,137 +4750,36 @@ function initializeSalesByItemChart() {
   updateSalesByItemChart();
 }
 
-async function updateSalesByItemChart() {
+function updateSalesByItemChart() {
   if (!salesByItemChart) {
     initializeSalesByItemChart();
     return;
   }
   
-  try {
-    const days = parseInt(document.getElementById('salesChartDays')?.value || '30');
-    const chartType = document.getElementById('salesChartType')?.value || 'bar';
-    
-    // Update chart type
-    salesByItemChart.config.type = chartType;
-    
-    // Fetch orders for the specified period
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-    
-    let ordersRes;
-    try {
-      ordersRes = await apiFetch(`/orders?page=1&pageSize=1000`);
-    } catch (_e) {
-      const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=1000`);
-      if (!r.ok) throw new Error('orders');
-      ordersRes = await r.json();
-    }
-
-    const allOrders = (ordersRes.orders || []).filter(order => {
-      if (!order.createdAt) return false;
-      const orderDate = new Date(order.createdAt);
-      return orderDate >= startDate && orderDate <= endDate;
-    });
-    
-    // Get top 5 items if not already loaded
-    if (!window.top5ItemsData || window.top5ItemsData.length === 0) {
-      await loadTop5Items();
-    }
-    
-    const top5Items = window.top5ItemsData || [];
-    if (top5Items.length === 0) {
-      salesByItemChart.data.labels = [];
-      salesByItemChart.data.datasets = [];
-      salesByItemChart.update();
-      return;
-    }
-    
-    const colors = ['#9CA3AF', '#86EFAC', '#93C5FD', '#F9A8D4', '#FDE047'];
-    
-    // Group orders by date
-    const dateMap = new Map();
-    
-    // Initialize date map for all days in range
-    for (let i = 0; i < days; i++) {
-      const d = new Date(startDate);
-      d.setDate(d.getDate() + i);
-      const dateKey = d.toISOString().slice(0, 10);
-      const dateLabel = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      dateMap.set(dateKey, {
-        date: dateKey,
-        label: dateLabel,
-        items: new Map()
-      });
-    }
-    
-    // Process orders and aggregate sales by item and date
-    for (const order of allOrders) {
-      const orderDate = new Date(order.createdAt);
-      const dateKey = orderDate.toISOString().slice(0, 10);
-      
-      if (!dateMap.has(dateKey)) continue;
-      
-      const dayData = dateMap.get(dateKey);
-      
-      // Fetch order items
-      let items = [];
-      try {
-        const itemsRes = await apiFetch(`/orders/${order.id}/items`);
-        items = itemsRes.items || [];
-      } catch (_eItemsAuth) {
-        try {
-          const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${order.id}/items/public`);
-          if (r.ok) {
-            const j = await r.json();
-            items = j.items || [];
-          }
-        } catch (_) {}
-      }
-      
-      // Aggregate sales by product name for this day
-      items.forEach(item => {
-        const productName = item.product_name || item.name || 'Unknown Product';
-        const totalPrice = Number(item.total_price || (item.quantity || 0) * (item.unit_price || item.price || 0));
-        
-        // Only track top 5 items
-        const top5Item = top5Items.find(t => t.name === productName);
-        if (top5Item) {
-          if (dayData.items.has(productName)) {
-            dayData.items.set(productName, dayData.items.get(productName) + totalPrice);
-          } else {
-            dayData.items.set(productName, totalPrice);
-          }
-        }
-      });
-    }
-    
-    // Prepare chart data
-    const sortedDates = Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-    const labels = sortedDates.map(d => d.label);
-    
-    // Create datasets for each top 5 item
-    const datasets = top5Items.map((item, index) => {
-      const data = sortedDates.map(dayData => {
-        return dayData.items.get(item.name) || 0;
-      });
-      
-      return {
-        label: item.name,
-        data: data,
-        backgroundColor: colors[index],
-        borderColor: colors[index],
-        borderWidth: 1
-      };
-    });
-    
-    // Update chart
-    salesByItemChart.data.labels = labels;
-    salesByItemChart.data.datasets = datasets;
+  const chartType = document.getElementById('salesChartType')?.value || 'bar';
+  salesByItemChart.config.type = chartType;
+  
+  const items = window.top5ItemsData || [];
+  if (!items.length) {
+    salesByItemChart.data.labels = [];
+    salesByItemChart.data.datasets = [];
     salesByItemChart.update();
-  } catch (error) {
-    console.error('Error updating sales by item chart:', error);
+    return;
   }
+  
+  const colors = ['#60A5FA', '#34D399', '#F87171', '#FBBF24', '#A78BFA', '#F472B6'];
+  const datasetColors = items.map((_, idx) => colors[idx % colors.length]);
+  
+  salesByItemChart.data.labels = items.map(item => item.name || 'Unknown Product');
+  salesByItemChart.data.datasets = [{
+    label: 'Net Sales',
+    data: items.map(item => Number(item.netSales || 0)),
+    backgroundColor: datasetColors,
+    borderColor: datasetColors,
+    borderWidth: 1
+  }];
+  
+  salesByItemChart.update();
 }
 
 // --------------------------- LOGOUT FUNCTION ---------------------------
