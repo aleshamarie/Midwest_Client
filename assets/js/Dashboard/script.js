@@ -363,11 +363,18 @@ function renderScannedProducts() {
   const clearBtn = document.getElementById('clearScannedBtn');
 
   if (scannedProducts.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-gray-500 py-3">Scan a product to add it to in-store sales.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-500 py-3">Scan a product to add it to in-store sales.</td></tr>';
     if (processBtn) processBtn.disabled = true;
     if (clearBtn) clearBtn.disabled = true;
+    
+    // Hide subtotal when no products
+    const subtotalContainer = document.getElementById('scannerSubtotalContainer');
+    if (subtotalContainer) subtotalContainer.classList.add('hidden');
   } else {
-    tbody.innerHTML = scannedProducts.map((product, index) => `
+    tbody.innerHTML = scannedProducts.map((product, index) => {
+      const unitPrice = product.price || 0;
+      const totalPrice = unitPrice * product.quantity;
+      return `
       <tr data-index="${index}">
         <td>${product.name}${product.variantName ? ` (${product.variantName})` : ''}</td>
         <td>${product.barcode || '—'}</td>
@@ -380,6 +387,12 @@ function renderScannedProducts() {
                  data-index="${index}"
                  onchange="updateScannedQuantity(${index}, this.value)">
         </td>
+        <td class="text-right">
+          <div class="text-sm">
+            <div>₱${unitPrice.toFixed(2)}</div>
+            <div class="text-gray-600 text-xs">× ${product.quantity} = ₱${totalPrice.toFixed(2)}</div>
+          </div>
+        </td>
         <td>
           <button onclick="removeScannedProduct(${index})" 
                   class="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm">
@@ -387,9 +400,17 @@ function renderScannedProducts() {
           </button>
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
     if (processBtn) processBtn.disabled = false;
     if (clearBtn) clearBtn.disabled = false;
+    
+    // Calculate and display subtotal
+    const subtotal = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+    const subtotalContainer = document.getElementById('scannerSubtotalContainer');
+    const subtotalDisplay = document.getElementById('scannerSubtotal');
+    if (subtotalContainer) subtotalContainer.classList.remove('hidden');
+    if (subtotalDisplay) subtotalDisplay.textContent = `₱${subtotal.toFixed(2)}`;
   }
 
   const counter = document.getElementById('scannerInventoryCount');
@@ -425,6 +446,7 @@ function updateScannedQuantity(index, newQuantity) {
   }
   
   scannedProducts[index].quantity = qty;
+  renderScannedProducts(); // Re-render to update subtotal
 }
 
 function removeScannedProduct(index) {
@@ -563,10 +585,74 @@ async function processScannedSale() {
     paymentSelect.value = 'Cash';
   }
 
+  // Show/hide cash received field based on payment method
+  toggleCashReceivedField();
+
   // Show the modal
   const modal = document.getElementById('saleConfirmationModal');
   if (modal) {
     modal.classList.remove('hidden');
+  }
+}
+
+function toggleCashReceivedField() {
+  const paymentSelect = document.getElementById('saleConfirmationPayment');
+  const cashReceivedContainer = document.getElementById('cashReceivedContainer');
+  const cashReceivedInput = document.getElementById('cashReceived');
+  const changeDisplay = document.getElementById('changeDisplay');
+  
+  if (paymentSelect && cashReceivedContainer) {
+    if (paymentSelect.value === 'Cash') {
+      cashReceivedContainer.classList.remove('hidden');
+      if (cashReceivedInput) {
+        cashReceivedInput.value = '';
+        cashReceivedInput.focus();
+      }
+      calculateChange();
+    } else {
+      cashReceivedContainer.classList.add('hidden');
+      if (cashReceivedInput) cashReceivedInput.value = '';
+      if (changeDisplay) changeDisplay.classList.add('hidden');
+    }
+  }
+}
+
+function calculateChange() {
+  const cashReceivedInput = document.getElementById('cashReceived');
+  const changeDisplay = document.getElementById('changeDisplay');
+  const changeAmount = document.getElementById('changeAmount');
+  
+  if (!cashReceivedInput || !changeDisplay || !changeAmount) return;
+  
+  const cashReceived = parseFloat(cashReceivedInput.value) || 0;
+  
+  // Calculate net total from scanned products
+  const totalValue = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+  const discountInput = document.getElementById('scannerDiscount')?.value.trim() || '';
+  let discount = 0;
+  if (discountInput) {
+    if (discountInput.includes('%')) {
+      const percent = parseFloat(discountInput.replace('%', '').trim()) || 0;
+      discount = (percent / 100) * totalValue;
+    } else {
+      discount = parseFloat(discountInput) || 0;
+    }
+  }
+  const netTotal = totalValue - discount;
+  
+  if (cashReceived > 0) {
+    const change = cashReceived - netTotal;
+    if (change >= 0) {
+      changeDisplay.classList.remove('hidden');
+      changeAmount.textContent = `₱${change.toFixed(2)}`;
+      changeAmount.className = 'text-lg font-semibold text-green-600';
+    } else {
+      changeDisplay.classList.remove('hidden');
+      changeAmount.textContent = `₱${Math.abs(change).toFixed(2)}`;
+      changeAmount.className = 'text-lg font-semibold text-red-600';
+    }
+  } else {
+    changeDisplay.classList.add('hidden');
   }
 }
 
@@ -578,6 +664,36 @@ function closeSaleConfirmationModal() {
 }
 
 async function confirmSaleProcessing() {
+  // Validate cash received if payment is Cash
+  const paymentMethod = document.getElementById('saleConfirmationPayment')?.value || 'Cash';
+  if (paymentMethod === 'Cash') {
+    const cashReceivedInput = document.getElementById('cashReceived');
+    const cashReceived = parseFloat(cashReceivedInput?.value) || 0;
+    
+    // Calculate net total
+    const totalValue = scannedProducts.reduce((sum, p) => sum + (p.price * p.quantity), 0);
+    const discountInput = document.getElementById('scannerDiscount')?.value.trim() || '';
+    let discount = 0;
+    if (discountInput) {
+      if (discountInput.includes('%')) {
+        const percent = parseFloat(discountInput.replace('%', '').trim()) || 0;
+        discount = (percent / 100) * totalValue;
+      } else {
+        discount = parseFloat(discountInput) || 0;
+      }
+    }
+    const netTotal = totalValue - discount;
+    
+    if (cashReceived < netTotal) {
+      Swal.fire({
+        icon: 'error',
+        title: 'Insufficient Cash',
+        text: `Cash received (₱${cashReceived.toFixed(2)}) is less than net total (₱${netTotal.toFixed(2)}). Please enter sufficient cash amount.`
+      });
+      return;
+    }
+  }
+
   // Close the modal
   closeSaleConfirmationModal();
 
@@ -634,28 +750,42 @@ async function confirmSaleProcessing() {
 
         // Get payment method from modal
         const paymentMethod = document.getElementById('saleConfirmationPayment')?.value || 'Cash';
+        
+        // Get cash received if payment is Cash
+        let cashReceived = 0;
+        if (paymentMethod === 'Cash') {
+          const cashReceivedInput = document.getElementById('cashReceived');
+          cashReceived = parseFloat(cashReceivedInput?.value) || 0;
+        }
 
         // Generate a device ID for in-store sales (use a fixed identifier)
         const inStoreDeviceId = 'INSTORE-' + new Date().getTime();
 
         // Create the order
+        const orderData = {
+          name: 'In-Store Sale',
+          contact: '',
+          address: '',
+          payment: paymentMethod,
+          ref: null, // No reference number for in-store GCash
+          totalPrice: totalPrice,
+          discount: calculatedDiscount,
+          net_total: calculatedNetTotal,
+          status: 'Completed',
+          type: 'In-Store',
+          device_id: inStoreDeviceId,
+          fcm_token: null,
+          items: orderItems
+        };
+        
+        // Add cash_received if payment is Cash
+        if (paymentMethod === 'Cash' && cashReceived > 0) {
+          orderData.cash_received = cashReceived;
+        }
+
         await apiFetch('/orders', {
           method: 'POST',
-          body: JSON.stringify({
-            name: 'In-Store Sale',
-            contact: '',
-            address: '',
-            payment: paymentMethod,
-            ref: null, // No reference number for in-store GCash
-            totalPrice: totalPrice,
-            discount: calculatedDiscount,
-            net_total: calculatedNetTotal,
-            status: 'Completed',
-            type: 'In-Store',
-            device_id: inStoreDeviceId,
-            fcm_token: null,
-            items: orderItems
-          })
+          body: JSON.stringify(orderData)
         });
 
         Swal.fire({
@@ -2448,74 +2578,121 @@ async function saveOrder() {
     }
   }
 
-  const newOrder = {
-    id: 'ORD' + (orders.length + 1),
-    customer,
-    contact,
-    address,
-    total,
-    discount,
-    netTotal,
-    status,
-    type,
-    payment,
-    ref,
-    payment_proof_image_url: paymentProofImageUrl,
-    payment_proof_public_id: paymentProofPublicId,
-    items: orderItems.map(item => ({
-      product_name: item.product_name,
-      quantity: item.quantity,
-      unit_price: item.unit_price,
-      total_price: item.total_price
-    })),
-    createdAt: new Date().toISOString()
-  };
+  try {
+    // Prepare order data for API
+    const orderData = {
+      name: customer,
+      contact: contact,
+      address: address,
+      payment: payment,
+      ref: payment === 'GCash' ? ref : null,
+      totalPrice: total,
+      discount: discount,
+      net_total: netTotal,
+      status: status,
+      type: type,
+      items: orderItems.map(item => ({
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price
+      }))
+    };
 
-  if (editOrderIndex !== null) {
-    // keep same id
-    newOrder.id = orders[editOrderIndex].id;
-    orders[editOrderIndex] = newOrder;
-  } else {
-    orders.push(newOrder);
-  }
-
-  localStorage.setItem('orders', JSON.stringify(orders));
-  await saveToBackend();
-  
-  // Upload payment proof after order is created (if it's a new order and has payment proof)
-  if (editOrderIndex === null && payment === 'GCash' && paymentProofFile) {
-    try {
-      const orderId = newOrder.id;
-      const formData = new FormData();
-      formData.append('image', paymentProofFile);
-      
-      const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${orderId}/payment-proof/public`, {
-        method: 'POST',
-        body: formData
+    let createdOrder;
+    
+    if (editOrderIndex !== null) {
+      // Update existing order
+      const existingOrderId = orders[editOrderIndex].id;
+      const res = await apiFetch(`/orders/${existingOrderId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(orderData)
       });
-      
-      if (response.ok) {
-        const result = await response.json();
-        newOrder.payment_proof_image_url = result.order.payment_proof_image_url;
-        newOrder.payment_proof_public_id = result.order.payment_proof_public_id;
-        // Update in localStorage
-        if (editOrderIndex !== null) {
-          orders[editOrderIndex] = newOrder;
-        } else {
-          orders[orders.length - 1] = newOrder;
-        }
-        localStorage.setItem('orders', JSON.stringify(orders));
-      }
-    } catch (error) {
-      console.error('Error uploading payment proof:', error);
-      // Don't block order creation if payment proof upload fails
+      createdOrder = res.order;
+    } else {
+      // Create new order via API
+      const res = await apiFetch('/orders', {
+        method: 'POST',
+        body: JSON.stringify(orderData)
+      });
+      createdOrder = res.order;
     }
+
+    // Upload payment proof after order is created (if it's a new order and has payment proof)
+    if (editOrderIndex === null && payment === 'GCash' && paymentProofFile) {
+      try {
+        const orderId = createdOrder.id;
+        const formData = new FormData();
+        formData.append('image', paymentProofFile);
+        
+        const response = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/${orderId}/payment-proof/public`, {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (response.ok) {
+          const result = await response.json();
+          createdOrder = result.order;
+        }
+      } catch (error) {
+        console.error('Error uploading payment proof:', error);
+        // Don't block order creation if payment proof upload fails
+      }
+    }
+
+    // Refresh orders from backend to get the latest data
+    await refreshOrdersOnly();
+    
+    // Also refresh metrics to update the total orders count
+    try {
+      const metrics = await apiFetch('/dashboard/metrics').catch(async () => {
+        const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/dashboard/metrics`);
+        if (!r.ok) throw new Error('metrics');
+        return r.json();
+      });
+      document.getElementById('totalOrders').textContent = Number(metrics.totalOrders || orders.length);
+    } catch (_e) {
+      // Fallback to using orders array length if metrics fetch fails
+      document.getElementById('totalOrders').textContent = orders.length;
+    }
+    
+    // Find the created/updated order in the refreshed list
+    const savedOrder = orders.find(o => o.id === createdOrder.id) || {
+      id: createdOrder.id,
+      displayId: createdOrder.order_code || `ORD${createdOrder.id}`,
+      customer: createdOrder.name || customer,
+      contact: createdOrder.contact || contact,
+      address: createdOrder.address || address,
+      total: Number(createdOrder.totalPrice || total),
+      discount: Number(createdOrder.discount || discount),
+      netTotal: Number(createdOrder.net_total || netTotal),
+      status: createdOrder.status || status,
+      type: createdOrder.type || type,
+      payment: createdOrder.payment || payment,
+      ref: createdOrder.ref || ref,
+      payment_proof_image_url: createdOrder.payment_proof_image_url || null,
+      payment_proof_public_id: createdOrder.payment_proof_public_id || null,
+      createdAt: createdOrder.createdAt || new Date().toISOString()
+    };
+    
+    closeOrderModal();
+    updateDashboard();
+    showReceipt(savedOrder);
+    
+    Swal.fire({
+      icon: 'success',
+      title: editOrderIndex !== null ? 'Order Updated!' : 'Order Created!',
+      timer: 2000,
+      showConfirmButton: false
+    });
+  } catch (error) {
+    console.error('Error saving order:', error);
+    Swal.fire({
+      icon: 'error',
+      title: 'Failed to Save Order',
+      text: error.message || 'An error occurred while saving the order'
+    });
   }
-  
-  closeOrderModal();
-  renderOrders();
-  updateDashboard();
-  showReceipt(newOrder);
 }
 
 function deleteOrder(i) {
@@ -3432,19 +3609,48 @@ function showReceipt(order) {
   document.getElementById('receiptPayment').textContent = order.payment;
   document.getElementById('receiptRef').textContent = order.payment === 'GCash' && order.ref ? order.ref : '-';
   document.getElementById('receiptStatus').textContent = order.status;
+  
+  // Calculate subtotal (total before discount)
+  const subtotal = Number(order.total || order.totalPrice || 0);
+  const discount = Number(order.discount || 0);
+  const netTotal = Number(order.netTotal || order.net_total || (subtotal - discount));
+  
   // Pre-fill using order object; will be reconciled after loading items
-  document.getElementById('receiptTotal').textContent = Number(order.total || order.totalPrice || 0).toFixed(2);
-  document.getElementById('receiptDiscount').textContent = Number(order.discount || 0).toFixed(2);
-  document.getElementById('receiptNetTotal').textContent = Number(order.netTotal || order.net_total || (Number(order.total || order.totalPrice || 0) - Number(order.discount || 0))).toFixed(2);
+  document.getElementById('receiptSubtotal').textContent = subtotal.toFixed(2);
+  document.getElementById('receiptDiscount').textContent = discount.toFixed(2);
+  document.getElementById('receiptNetTotal').textContent = netTotal.toFixed(2);
+  
+  // Show/hide cash received and change for Cash payments
+  const cashReceivedRow = document.getElementById('receiptCashReceivedRow');
+  const changeRow = document.getElementById('receiptChangeRow');
+  const cashReceived = Number(order.cash_received || order.cashReceived || 0);
+  
+  // Always show cash received and change rows for Cash payments
+  if (order.payment === 'Cash') {
+    cashReceivedRow.classList.remove('hidden');
+    changeRow.classList.remove('hidden');
+    document.getElementById('receiptCashReceived').textContent = cashReceived > 0 ? cashReceived.toFixed(2) : '0.00';
+    const change = cashReceived > 0 ? (cashReceived - netTotal) : -netTotal;
+    document.getElementById('receiptChange').textContent = change.toFixed(2);
+  } else {
+    cashReceivedRow.classList.add('hidden');
+    changeRow.classList.add('hidden');
+  }
   // Load items into receipt table
   (async () => {
     try {
       let items = [];
+      let fullOrderData = null;
       // Prefer loading the full order with embedded items (more reliable)
       try {
         const full = await apiFetch(`/orders/${order.id}`);
+        fullOrderData = full;
         if (full && full.order && Array.isArray(full.order.items) && full.order.items.length) {
           items = full.order.items;
+        }
+        // Update order with cash_received from API if available
+        if (full && full.order && full.order.cash_received !== undefined) {
+          order.cash_received = full.order.cash_received;
         }
       } catch (_e1) {}
       // Fallback to items endpoint
@@ -3503,12 +3709,28 @@ function showReceipt(order) {
       document.getElementById('receiptItems').innerHTML = rows || '<tr><td class="px-3 py-2" colspan="4">No items</td></tr>';
       // Recompute totals from the loaded items (ensures accuracy)
       if (items.length) {
-        const computedTotal = items.reduce((s, it) => s + Number(it.total_price || (Number(it.quantity||0) * Number(it.unit_price || it.price || 0))), 0);
+        const computedSubtotal = items.reduce((s, it) => s + Number(it.total_price || (Number(it.quantity||0) * Number(it.unit_price || it.price || 0))), 0);
         const discount = Number(order.discount || 0);
-        const net = computedTotal - discount;
-        document.getElementById('receiptTotal').textContent = computedTotal.toFixed(2);
+        const net = computedSubtotal - discount;
+        document.getElementById('receiptSubtotal').textContent = computedSubtotal.toFixed(2);
         document.getElementById('receiptDiscount').textContent = discount.toFixed(2);
         document.getElementById('receiptNetTotal').textContent = net.toFixed(2);
+        
+        // Update cash received and change if payment is Cash
+        // Try to get cash_received from the order object or full API response
+        let cashReceived = Number(order.cash_received || order.cashReceived || 0);
+        if (cashReceived === 0 && fullOrderData && fullOrderData.order && fullOrderData.order.cash_received !== undefined) {
+          cashReceived = Number(fullOrderData.order.cash_received || 0);
+        }
+        
+        if (order.payment === 'Cash') {
+          // Always show cash received and change rows for Cash payments
+          cashReceivedRow.classList.remove('hidden');
+          changeRow.classList.remove('hidden');
+          document.getElementById('receiptCashReceived').textContent = cashReceived.toFixed(2);
+          const change = cashReceived - net;
+          document.getElementById('receiptChange').textContent = change.toFixed(2);
+        }
       }
     } catch (_e) {
       document.getElementById('receiptItems').innerHTML = '<tr><td class="px-3 py-2" colspan="4">No items</td></tr>';
@@ -3967,8 +4189,8 @@ async function loadFromBackend() {
       return r.json();
     });
     const suppliersPromise = apiFetch('/suppliers');
-    const ordersPromise = apiFetch('/orders?page=1&pageSize=100').catch(async () => {
-      const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=100`);
+    const ordersPromise = apiFetch('/orders?page=1&pageSize=10000').catch(async () => {
+      const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=10000`);
       if (!r.ok) throw new Error('orders');
       return r.json();
     });
@@ -4002,6 +4224,7 @@ async function loadFromBackend() {
       total: Number(o.totalPrice || 0), 
       discount: Number(o.discount || 0), 
       netTotal: Number(o.net_total || 0), 
+      cash_received: Number(o.cash_received || 0),
       status: o.status, 
       type: o.type, 
       payment: o.payment, 
@@ -4083,6 +4306,12 @@ async function init() {
   if (clearBtn) {
     clearBtn.addEventListener('click', clearScannedProducts);
   }
+  
+  // Setup discount input listener to update change calculation
+  const discountInput = document.getElementById('scannerDiscount');
+  if (discountInput) {
+    discountInput.addEventListener('input', calculateChange);
+  }
 
   // Periodically refresh orders so mobile updates (e.g., payment refs) appear
   setInterval(async () => {
@@ -4102,9 +4331,9 @@ async function init() {
 async function refreshOrdersOnly() {
   let ordersRes;
   try {
-    ordersRes = await apiFetch('/orders?page=1&pageSize=100');
+    ordersRes = await apiFetch('/orders?page=1&pageSize=10000');
   } catch (_e) {
-    const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=100`);
+    const r = await fetch(`${window.APP_CONFIG.API_BASE_URL}/orders/public?page=1&pageSize=10000`);
     if (!r.ok) throw new Error('orders');
     ordersRes = await r.json();
   }
@@ -4117,6 +4346,7 @@ async function refreshOrdersOnly() {
     total: Number(o.totalPrice || 0), 
     discount: Number(o.discount || 0), 
     netTotal: Number(o.net_total || 0), 
+    cash_received: Number(o.cash_received || 0),
     status: o.status, 
     type: o.type, 
     payment: o.payment, 
@@ -4128,6 +4358,13 @@ async function refreshOrdersOnly() {
   localStorage.setItem('orders', JSON.stringify(orders));
   renderOrders();
   updateDashboard();
+  
+  // Also update total orders count from actual orders array length
+  // This ensures the count is accurate even if metrics API hasn't updated yet
+  const totalOrdersEl = document.getElementById('totalOrders');
+  if (totalOrdersEl) {
+    totalOrdersEl.textContent = orders.length;
+  }
 }
 
 // Refresh only products

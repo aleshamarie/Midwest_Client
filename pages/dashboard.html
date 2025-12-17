@@ -346,11 +346,22 @@
                   <th>Product Name</th>
                   <th>Barcode Number</th>
                   <th>Quantity</th>
+                  <th>Price</th>
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody></tbody>
             </table>
+          </div>
+
+          <!-- Subtotal Display -->
+          <div id="scannerSubtotalContainer" class="mb-4 flex justify-center hidden">
+            <div class="w-64 bg-gray-50 border rounded-lg p-3">
+              <div class="flex justify-between items-center">
+                <span class="text-sm font-semibold text-gray-700">Subtotal:</span>
+                <span id="scannerSubtotal" class="text-lg font-bold text-green-600">₱0.00</span>
+              </div>
+            </div>
           </div>
 
           <!-- Discount Input -->
@@ -861,9 +872,11 @@
           <div class="rc-section">
             <table>
               <tbody>
-                <tr><td>Total:</td><td class="num">₱<span id="receiptTotal"></span></td></tr>
+                <tr><td>Subtotal:</td><td class="num">₱<span id="receiptSubtotal"></span></td></tr>
                 <tr><td>Discount:</td><td class="num">₱<span id="receiptDiscount"></span></td></tr>
                 <tr class="rc-total-row"><td>Net Total:</td><td class="num">₱<span id="receiptNetTotal"></span></td></tr>
+                <tr id="receiptCashReceivedRow" class="hidden"><td>Cash Received:</td><td class="num">₱<span id="receiptCashReceived"></span></td></tr>
+                <tr id="receiptChangeRow" class="hidden"><td class="font-semibold">Change:</td><td class="num font-semibold">₱<span id="receiptChange"></span></td></tr>
               </tbody>
             </table>
           </div>
@@ -1050,10 +1063,23 @@
 
           <div class="mb-4">
             <label class="block text-sm text-gray-600 mb-2" for="saleConfirmationPayment">Payment Method</label>
-            <select id="saleConfirmationPayment" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500">
+            <select id="saleConfirmationPayment" class="border rounded w-full px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500" onchange="toggleCashReceivedField()">
               <option value="Cash">Cash</option>
               <option value="GCash">GCash</option>
             </select>
+          </div>
+
+          <!-- Cash Received Input (shown only when Cash is selected) -->
+          <div id="cashReceivedContainer" class="mb-4 hidden">
+            <label class="block text-sm text-gray-600 mb-2" for="cashReceived">Cash Received</label>
+            <div class="flex items-stretch border rounded overflow-hidden focus-within:ring-2 focus-within:ring-green-500">
+              <span class="px-3 py-2 bg-gray-50 text-gray-600 select-none">₱</span>
+              <input type="number" id="cashReceived" step="0.01" min="0" class="flex-1 px-3 py-2 outline-none" placeholder="0.00" oninput="calculateChange()">
+            </div>
+            <div id="changeDisplay" class="mt-2 text-right hidden">
+              <span class="text-sm text-gray-600">Change: </span>
+              <span id="changeAmount" class="text-lg font-semibold text-green-600">₱0.00</span>
+            </div>
           </div>
 
           <p class="mt-3 text-red-600 font-semibold text-sm">This will decrease stock. Continue?</p>
